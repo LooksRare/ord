@@ -578,22 +578,17 @@ impl Settings {
     self.server_url.as_deref()
   }
 
-  pub fn rabbitmq_url(&self) -> Option<&String> {
-    self.rabbitmq_url.as_ref()
+  pub fn rabbitmq_exchange(&self) -> Option<&str> {
+    self.rabbitmq_exchange.as_deref()
   }
 
-  pub fn rabbitmq_username(&self) -> Option<&String> {
-    self.rabbitmq_username.as_ref()
-  }
+  pub fn rabbitmq_addr(&self) -> Option<String> {
+    let user = self.rabbitmq_username.as_ref()?;
+    let pass = self.rabbitmq_password.as_ref()?;
+    let url = self.rabbitmq_url.as_ref()?;
 
-  pub fn rabbitmq_password(&self) -> Option<&String> {
-    self.rabbitmq_password.as_ref()
+    Some(format!("amqp://{}:{}@{}", user, pass, url))
   }
-
-  pub fn rabbitmq_exchange(&self) -> Option<&String> {
-    self.rabbitmq_exchange.as_ref()
-  }
-
 }
 
 #[cfg(test)]
