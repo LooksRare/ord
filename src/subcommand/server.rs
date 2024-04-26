@@ -1520,6 +1520,7 @@ impl Server {
     })
   }
 
+  // TODO need to enhance this api to return all necessary data
   async fn inscription(
     Extension(server_config): Extension<Arc<ServerConfig>>,
     Extension(index): Extension<Arc<Index>>,
