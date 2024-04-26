@@ -77,7 +77,7 @@ impl Subcommand {
         server.run(settings, index, handle)
       }
       Self::EventServer(server) => {
-        let consumer = EventConsumer::run(&settings)?;
+        let _consumer = EventConsumer::run(&settings)?;
         let publisher = EventPublisher::run(&settings)?;
         let handle = axum_server::Handle::new();
         let index = Arc::new(Index::open_with_event_sender(

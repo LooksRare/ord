@@ -31,6 +31,7 @@ pub struct Settings {
   rabbitmq_username: Option<String>,
   rabbitmq_password: Option<String>,
   rabbitmq_exchange: Option<String>,
+  rabbitmq_queue: Option<String>,
 }
 
 impl Settings {
@@ -149,6 +150,7 @@ impl Settings {
       rabbitmq_username: self.rabbitmq_username.or(source.rabbitmq_username),
       rabbitmq_password: self.rabbitmq_password.or(source.rabbitmq_password),
       rabbitmq_exchange: self.rabbitmq_exchange.or(source.rabbitmq_exchange),
+      rabbitmq_queue: self.rabbitmq_queue.or(source.rabbitmq_queue),
     }
   }
 
@@ -187,6 +189,7 @@ impl Settings {
       rabbitmq_username: options.rabbitmq_username,
       rabbitmq_password: options.rabbitmq_password,
       rabbitmq_exchange: options.rabbitmq_exchange,
+      rabbitmq_queue: options.rabbitmq_queue,
     }
   }
 
@@ -269,6 +272,7 @@ impl Settings {
       rabbitmq_username: get_string("RMQ_USERNAME"),
       rabbitmq_password: get_string("RMQ_PASSWORD"),
       rabbitmq_exchange: get_string("RMQ_EXCHANGE"),
+      rabbitmq_queue: get_string("RMQ_QUEUE"),
     })
   }
 
@@ -302,6 +306,7 @@ impl Settings {
       rabbitmq_username: None,
       rabbitmq_password: None,
       rabbitmq_exchange: None,
+      rabbitmq_queue: None,
     }
   }
 
@@ -385,6 +390,7 @@ impl Settings {
       rabbitmq_username: self.rabbitmq_username,
       rabbitmq_password: self.rabbitmq_password,
       rabbitmq_exchange: self.rabbitmq_exchange,
+      rabbitmq_queue: self.rabbitmq_queue,
     })
   }
 
@@ -580,6 +586,10 @@ impl Settings {
 
   pub fn rabbitmq_exchange(&self) -> Option<&str> {
     self.rabbitmq_exchange.as_deref()
+  }
+
+  pub fn rabbitmq_queue(&self) -> Option<&str> {
+    self.rabbitmq_queue.as_deref()
   }
 
   pub fn rabbitmq_addr(&self) -> Option<String> {
@@ -1040,6 +1050,7 @@ mod tests {
       ("RMQ_USERNAME", "rmq username"),
       ("RMQ_PASSWORD", "rmq password"),
       ("RMQ_EXCHANGE", "rmq exchange"),
+      ("RMQ_QUEUE", "rmq queue"),
     ]
     .into_iter()
     .map(|(key, value)| (key.into(), value.into()))
@@ -1087,6 +1098,7 @@ mod tests {
         rabbitmq_username: Some("rmq username".into()),
         rabbitmq_password: Some("rmq password".into()),
         rabbitmq_exchange: Some("rmq exchange".into()),
+        rabbitmq_queue: Some("rmq queue".into()),
       }
     );
   }
@@ -1123,6 +1135,7 @@ mod tests {
           "--rabbitmq-username=rmq username",
           "--rabbitmq-password=rmq password",
           "--rabbitmq-exchange=rmq exchange",
+          "--rabbitmq-queue=rmq queue",
         ])
         .unwrap()
       ),
@@ -1155,6 +1168,7 @@ mod tests {
         rabbitmq_username: Some("rmq username".into()),
         rabbitmq_password: Some("rmq password".into()),
         rabbitmq_exchange: Some("rmq exchange".into()),
+        rabbitmq_queue: Some("rmq queue".into()),
       }
     );
   }

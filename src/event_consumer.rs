@@ -13,12 +13,10 @@ impl EventConsumer {
       .rabbitmq_addr()
       .context("rabbitmq amqp credentials and url must be defined")?;
 
-    // let queue = settings
-    //   .rabbitmq_queue()
-    //   .context("rabbitmq queue path must be defined")?
-    //   .to_owned();
-
-    let queue = "ord-q";
+    let queue = settings
+      .rabbitmq_queue()
+      .context("rabbitmq queue path must be defined")?
+      .to_owned();
 
     std::thread::spawn(move || {
       Runtime::new().expect("runtime is setup").block_on(async {
@@ -38,7 +36,7 @@ impl EventConsumer {
 
         let mut consumer = channel
           .basic_consume(
-            queue,
+            &queue,
             "lr-ord", //TODO pod name
             BasicConsumeOptions::default(),
             FieldTable::default(),
