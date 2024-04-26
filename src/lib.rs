@@ -113,6 +113,7 @@ mod into_usize;
 mod macros;
 mod object;
 pub mod options;
+pub mod ord_api_client;
 pub mod outgoing;
 mod re;
 mod representation;

@@ -1,18 +1,16 @@
-use std::sync::Arc;
-
 use anyhow::Context;
 use clap::Parser;
 use futures::StreamExt;
-use lapin::{Connection, ConnectionProperties, options::*, types::FieldTable};
+use lapin::{options::*, types::FieldTable, Connection, ConnectionProperties};
 use tokio::runtime::Runtime;
 
 use ordinals::SatPoint;
 
-use crate::{Index, InscriptionId};
 use crate::index::event::Event;
+use crate::ord_api_client::OrdApiClient;
 use crate::settings::Settings;
-use crate::subcommand::server::query;
 use crate::subcommand::SubcommandResult;
+use crate::InscriptionId;
 
 #[derive(Debug, Parser, Clone)]
 pub struct EventConsumer {
@@ -21,7 +19,7 @@ pub struct EventConsumer {
 }
 
 impl EventConsumer {
-  pub fn run(self, settings: &Settings, index: Arc<Index>) -> SubcommandResult {
+  pub fn run(self, settings: &Settings, ord_api_client: OrdApiClient) -> SubcommandResult {
     Runtime::new()?.block_on(async {
       let addr = settings
         .rabbitmq_addr()
@@ -63,7 +61,8 @@ impl EventConsumer {
             let event: Result<Event, _> = serde_json::from_slice(&delivery.data);
             match event {
               Ok(event) => {
-                self.handle_event(&index, &event)
+                self
+                  .handle_event(&ord_api_client, &event)
                   .await
                   .expect("confirms rmq msg processed");
                 delivery
@@ -89,7 +88,11 @@ impl EventConsumer {
     })
   }
 
-  async fn handle_event(&self, index: &Arc<Index>, event: &Event) -> Result<(), anyhow::Error> {
+  async fn handle_event(
+    &self,
+    ord_api_client: &OrdApiClient,
+    event: &Event,
+  ) -> Result<(), anyhow::Error> {
     match event {
       Event::InscriptionCreated {
         block_height,
@@ -99,7 +102,17 @@ impl EventConsumer {
         parent_inscription_ids,
         sequence_number,
       } => {
-        self.handle_inscription_created(index, block_height, charms, inscription_id, location, parent_inscription_ids, sequence_number).await
+        self
+          .handle_inscription_created(
+            ord_api_client,
+            block_height,
+            charms,
+            inscription_id,
+            location,
+            parent_inscription_ids,
+            sequence_number,
+          )
+          .await
       }
       Event::InscriptionTransferred {
         block_height,
@@ -108,33 +121,59 @@ impl EventConsumer {
         old_location,
         sequence_number,
       } => {
-        self.handle_inscription_transferred(block_height, inscription_id, new_location, old_location, sequence_number).await
+        self
+          .handle_inscription_transferred(
+            ord_api_client,
+            block_height,
+            inscription_id,
+            new_location,
+            old_location,
+            sequence_number,
+          )
+          .await
       }
-      _ => {
-        Ok(())
-      }
+      _ => Ok(()),
     }
   }
 
-  async fn handle_inscription_created(&self, index: &Arc<Index>, block_height: &u32, charms: &u16, inscription_id: &InscriptionId, location: &Option<SatPoint>, parent_inscription_ids: &Vec<InscriptionId>, sequence_number: &u32) -> Result<(), anyhow::Error> {
+  async fn handle_inscription_created(
+    &self,
+    ord_api_client: &OrdApiClient,
+    block_height: &u32,
+    charms: &u16,
+    inscription_id: &InscriptionId,
+    location: &Option<SatPoint>,
+    parent_inscription_ids: &Vec<InscriptionId>,
+    sequence_number: &u32,
+  ) -> Result<(), anyhow::Error> {
     log::info!("Received inscription created event: {:?}", inscription_id);
-    let response = index
-      .inscription_info(query::Inscription::Id(inscription_id.clone()))?;
-    match response {
-      Some((info, txout, inscription)) => {
-        log::info!("Persisting inscription: {:?}", info.id);
-        Ok(())
+    match ord_api_client
+      .fetch_inscription_details(inscription_id)
+      .await
+    {
+      Ok(inscription) => {
+        log::info!("Received inscription detailed response: {:?}", inscription);
       }
-      None => {
-        // TODO handle error properly
-        // Err(format!("Failed to handle inscription created event: {:?}", inscription_id));
-        Ok(())
+      Err(e) => {
+        log::error!("Failed to fetch: {:?}", e);
       }
-    }
+    };
+    Ok(())
   }
 
-  async fn handle_inscription_transferred(&self, block_height: &u32, inscription_id: &InscriptionId, new_location: &SatPoint, old_location: &SatPoint, sequence_number: &u32) -> Result<(), anyhow::Error> {
-    log::info!("Received inscription transferred event: {:?}", inscription_id);
+  async fn handle_inscription_transferred(
+    &self,
+    ord_api_client: &OrdApiClient,
+    block_height: &u32,
+    inscription_id: &InscriptionId,
+    new_location: &SatPoint,
+    old_location: &SatPoint,
+    sequence_number: &u32,
+  ) -> Result<(), anyhow::Error> {
+    log::info!(
+      "Received inscription transferred event: {:?}",
+      inscription_id
+    );
     Ok(())
   }
 }
