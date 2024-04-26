@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Context;
 use clap::Parser;
 use futures::StreamExt;
@@ -6,9 +8,10 @@ use tokio::runtime::Runtime;
 
 use ordinals::SatPoint;
 
+use crate::{Index, InscriptionId};
 use crate::index::event::Event;
-use crate::InscriptionId;
 use crate::settings::Settings;
+use crate::subcommand::server::query;
 use crate::subcommand::SubcommandResult;
 
 #[derive(Debug, Parser, Clone)]
@@ -18,7 +21,7 @@ pub struct EventConsumer {
 }
 
 impl EventConsumer {
-  pub fn run(self, settings: &Settings) -> SubcommandResult {
+  pub fn run(self, settings: &Settings, index: Arc<Index>) -> SubcommandResult {
     Runtime::new()?.block_on(async {
       let addr = settings
         .rabbitmq_addr()
@@ -60,7 +63,7 @@ impl EventConsumer {
             let event: Result<Event, _> = serde_json::from_slice(&delivery.data);
             match event {
               Ok(event) => {
-                self.handle_event(&event)
+                self.handle_event(&index, &event)
                   .await
                   .expect("confirms rmq msg processed");
                 delivery
@@ -86,7 +89,7 @@ impl EventConsumer {
     })
   }
 
-  async fn handle_event(&self, event: &Event) -> Result<(), sqlx::Error> {
+  async fn handle_event(&self, index: &Arc<Index>, event: &Event) -> Result<(), anyhow::Error> {
     match event {
       Event::InscriptionCreated {
         block_height,
@@ -96,7 +99,7 @@ impl EventConsumer {
         parent_inscription_ids,
         sequence_number,
       } => {
-        self.handle_inscription_created(block_height, charms, inscription_id, location, parent_inscription_ids, sequence_number).await
+        self.handle_inscription_created(index, block_height, charms, inscription_id, location, parent_inscription_ids, sequence_number).await
       }
       Event::InscriptionTransferred {
         block_height,
@@ -113,12 +116,24 @@ impl EventConsumer {
     }
   }
 
-  async fn handle_inscription_created(&self, block_height: &u32, charms: &u16, inscription_id: &InscriptionId, location: &Option<SatPoint>, parent_inscription_ids: &Vec<InscriptionId>, sequence_number: &u32) -> Result<(), sqlx::Error> {
+  async fn handle_inscription_created(&self, index: &Arc<Index>, block_height: &u32, charms: &u16, inscription_id: &InscriptionId, location: &Option<SatPoint>, parent_inscription_ids: &Vec<InscriptionId>, sequence_number: &u32) -> Result<(), anyhow::Error> {
     log::info!("Received inscription created event: {:?}", inscription_id);
-    Ok(())
+    let response = index
+      .inscription_info(query::Inscription::Id(inscription_id.clone()))?;
+    match response {
+      Some((info, txout, inscription)) => {
+        log::info!("Persisting inscription: {:?}", info.id);
+        Ok(())
+      }
+      None => {
+        // TODO handle error properly
+        // Err(format!("Failed to handle inscription created event: {:?}", inscription_id));
+        Ok(())
+      }
+    }
   }
 
-  async fn handle_inscription_transferred(&self, block_height: &u32, inscription_id: &InscriptionId, new_location: &SatPoint, old_location: &SatPoint, sequence_number: &u32) -> Result<(), sqlx::Error> {
+  async fn handle_inscription_transferred(&self, block_height: &u32, inscription_id: &InscriptionId, new_location: &SatPoint, old_location: &SatPoint, sequence_number: &u32) -> Result<(), anyhow::Error> {
     log::info!("Received inscription transferred event: {:?}", inscription_id);
     Ok(())
   }
