@@ -24,7 +24,7 @@ impl EventPublisher {
 
     let (tx, mut rx) = mpsc::channel::<Event>(128);
 
-    let receiver = std::thread::spawn(move || {
+    std::thread::spawn(move || {
       Runtime::new().expect("runtime is setup").block_on(async {
         let conn = Connection::connect(&addr, ConnectionProperties::default())
           .await
@@ -43,8 +43,6 @@ impl EventPublisher {
         while let Some(event) = rx.recv().await {
           let message = serde_json::to_vec(&event).expect("failed to serialize event");
 
-          log::info!("publishing event: {:#?}", event);
-
           let publish = channel
             .basic_publish(
               &exchange,
@@ -62,7 +60,6 @@ impl EventPublisher {
         }
       })
     });
-
 
     Ok(EventPublisher { sender: tx })
   }
