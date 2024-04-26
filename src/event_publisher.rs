@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use lapin::options::ConfirmSelectOptions;
 use lapin::{options::BasicPublishOptions, BasicProperties, Connection, ConnectionProperties};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
@@ -34,10 +35,15 @@ impl EventPublisher {
           .await
           .expect("creates rmq connection channel");
 
+        channel
+          .confirm_select(ConfirmSelectOptions::default())
+          .await
+          .expect("enable msg confirms");
+
         while let Some(event) = rx.recv().await {
           let message = serde_json::to_vec(&event).expect("failed to serialize event");
 
-          channel
+          let publish = channel
             .basic_publish(
               &exchange,
               "",
@@ -46,7 +52,11 @@ impl EventPublisher {
               BasicProperties::default(),
             )
             .await
-            .expect("published message to rmq");
+            .expect("published rmq msg")
+            .await
+            .expect("confirms rmq msg received");
+
+          assert!(publish.is_ack());
         }
       })
     });
