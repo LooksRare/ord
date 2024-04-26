@@ -21,10 +21,10 @@ impl EventPublisher {
       .context("rabbitmq exchange path must be defined")?
       .to_owned();
 
-    let (sender, mut receiver) = mpsc::channel::<Event>(128);
+    let (tx, mut rx) = mpsc::channel::<Event>(128);
 
-    std::thread::spawn(move || {
-      Runtime::new().expect("runtime setup ok").block_on(async {
+    let receiver = std::thread::spawn(move || {
+      Runtime::new().expect("runtime is setup").block_on(async {
         let conn = Connection::connect(&addr, ConnectionProperties::default())
           .await
           .expect("connects to rabbitmq ok");
@@ -34,7 +34,7 @@ impl EventPublisher {
           .await
           .expect("creates rmq connection channel");
 
-        while let Some(event) = receiver.recv().await {
+        while let Some(event) = rx.recv().await {
           let message = serde_json::to_vec(&event).expect("failed to serialize event");
 
           channel
@@ -46,11 +46,13 @@ impl EventPublisher {
               BasicProperties::default(),
             )
             .await
-            .expect("Failed to publish message");
+            .expect("published message to rmq");
         }
       })
     });
 
-    Ok(EventPublisher { sender })
+    receiver.join().expect("spawn blocking event rx thread");
+
+    Ok(EventPublisher { sender: tx })
   }
 }
