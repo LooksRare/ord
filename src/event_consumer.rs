@@ -1,25 +1,30 @@
 use anyhow::Context;
 use clap::Parser;
 use futures::StreamExt;
-use lapin::{options::*, types::FieldTable, Connection, ConnectionProperties};
+use lapin::{Connection, ConnectionProperties, options::*, types::FieldTable};
 use tokio::runtime::Runtime;
 
 use ordinals::SatPoint;
 
 use crate::index::event::Event;
+use crate::InscriptionId;
 use crate::ord_api_client::OrdApiClient;
+use crate::ord_db_client::OrdDbClient;
 use crate::settings::Settings;
 use crate::subcommand::SubcommandResult;
-use crate::InscriptionId;
 
 #[derive(Debug, Parser, Clone)]
 pub struct EventConsumer {
   #[arg(long, help = "RMQ queue to consume index events.")]
   pub(crate) rabbitmq_queue: Option<String>,
+  #[arg(long, help = "Ord api url to fetch inscriptions.")]
+  pub(crate) ord_api_url: Option<String>,
+  #[arg(long, help = "DB url to persist inscriptions.")]
+  pub(crate) database_url: Option<String>,
 }
 
 impl EventConsumer {
-  pub fn run(self, settings: &Settings, ord_api_client: OrdApiClient) -> SubcommandResult {
+  pub fn run(self, settings: &Settings) -> SubcommandResult {
     Runtime::new()?.block_on(async {
       let addr = settings
         .rabbitmq_addr()
@@ -54,6 +59,18 @@ impl EventConsumer {
         .await
         .expect("creates rmq consumer");
 
+      let ord_api_url = self
+        .ord_api_url
+        .clone()
+        .context("ord api url must be defined")?;
+      let ord_api_client = OrdApiClient::run(ord_api_url)?;
+
+      let database_url = self
+        .database_url
+        .as_deref()
+        .context("db url must be defined")?;
+      let ord_db_client = OrdDbClient::run(database_url).await?;
+
       log::info!("Starting to consume messages from {}", queue);
       while let Some(delivery) = consumer.next().await {
         match delivery {
@@ -62,7 +79,7 @@ impl EventConsumer {
             match event {
               Ok(event) => {
                 self
-                  .handle_event(&ord_api_client, &event)
+                  .handle_event(&ord_api_client, &ord_db_client, &event)
                   .await
                   .expect("confirms rmq msg processed");
                 delivery
@@ -91,6 +108,7 @@ impl EventConsumer {
   async fn handle_event(
     &self,
     ord_api_client: &OrdApiClient,
+    ord_db_client: &OrdDbClient,
     event: &Event,
   ) -> Result<(), anyhow::Error> {
     match event {
@@ -105,6 +123,7 @@ impl EventConsumer {
         self
           .handle_inscription_created(
             ord_api_client,
+            ord_db_client,
             block_height,
             charms,
             inscription_id,
@@ -124,6 +143,7 @@ impl EventConsumer {
         self
           .handle_inscription_transferred(
             ord_api_client,
+            ord_db_client,
             block_height,
             inscription_id,
             new_location,
@@ -139,6 +159,7 @@ impl EventConsumer {
   async fn handle_inscription_created(
     &self,
     ord_api_client: &OrdApiClient,
+    ord_db_client: &OrdDbClient,
     block_height: &u32,
     charms: &u16,
     inscription_id: &InscriptionId,
@@ -153,6 +174,7 @@ impl EventConsumer {
     {
       Ok(inscription) => {
         log::info!("Received inscription detailed response: {:?}", inscription);
+        ord_db_client.save_inscription(inscription).await?;
       }
       Err(e) => {
         log::error!("Failed to fetch: {:?}", e);
@@ -164,6 +186,7 @@ impl EventConsumer {
   async fn handle_inscription_transferred(
     &self,
     ord_api_client: &OrdApiClient,
+    ord_db_client: &OrdDbClient,
     block_height: &u32,
     inscription_id: &InscriptionId,
     new_location: &SatPoint,

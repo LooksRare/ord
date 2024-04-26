@@ -114,6 +114,8 @@ mod macros;
 mod object;
 pub mod options;
 pub mod ord_api_client;
+
+pub mod ord_db_client;
 pub mod outgoing;
 mod re;
 mod representation;

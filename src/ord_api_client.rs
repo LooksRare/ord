@@ -1,8 +1,6 @@
-use anyhow::Context;
 use reqwest::Client;
 
 use crate::api::Inscription;
-use crate::settings::Settings;
 use crate::InscriptionId;
 
 pub struct OrdApiClient {
@@ -11,12 +9,7 @@ pub struct OrdApiClient {
 }
 
 impl OrdApiClient {
-  pub fn run(settings: &Settings) -> anyhow::Result<Self, anyhow::Error> {
-    let ord_api_url = settings
-      .ord_api_url()
-      .context("ord api url must be defined")?
-      .to_owned();
-
+  pub fn run(ord_api_url: String) -> anyhow::Result<Self, anyhow::Error> {
     let client = Client::builder()
       .timeout(std::time::Duration::from_secs(30))
       // TODO add retries

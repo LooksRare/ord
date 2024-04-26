@@ -31,7 +31,6 @@ pub struct Settings {
   rabbitmq_username: Option<String>,
   rabbitmq_password: Option<String>,
   rabbitmq_exchange: Option<String>,
-  ord_api_url: Option<String>,
 }
 
 impl Settings {
@@ -150,7 +149,6 @@ impl Settings {
       rabbitmq_username: self.rabbitmq_username.or(source.rabbitmq_username),
       rabbitmq_password: self.rabbitmq_password.or(source.rabbitmq_password),
       rabbitmq_exchange: self.rabbitmq_exchange.or(source.rabbitmq_exchange),
-      ord_api_url: self.ord_api_url.or(source.ord_api_url),
     }
   }
 
@@ -189,7 +187,6 @@ impl Settings {
       rabbitmq_username: options.rabbitmq_username,
       rabbitmq_password: options.rabbitmq_password,
       rabbitmq_exchange: options.rabbitmq_exchange,
-      ord_api_url: options.ord_api_url,
     }
   }
 
@@ -272,7 +269,6 @@ impl Settings {
       rabbitmq_username: get_string("RMQ_USERNAME"),
       rabbitmq_password: get_string("RMQ_PASSWORD"),
       rabbitmq_exchange: get_string("RMQ_EXCHANGE"),
-      ord_api_url: get_string("ORD_API_URL"),
     })
   }
 
@@ -306,7 +302,6 @@ impl Settings {
       rabbitmq_username: None,
       rabbitmq_password: None,
       rabbitmq_exchange: None,
-      ord_api_url: None,
     }
   }
 
@@ -390,7 +385,6 @@ impl Settings {
       rabbitmq_username: self.rabbitmq_username,
       rabbitmq_password: self.rabbitmq_password,
       rabbitmq_exchange: self.rabbitmq_exchange,
-      ord_api_url: self.ord_api_url,
     })
   }
 
@@ -596,9 +590,6 @@ impl Settings {
     Some(format!("amqp://{}:{}@{}", user, pass, url))
   }
 
-  pub fn ord_api_url(&self) -> Option<&str> {
-    self.ord_api_url.as_deref()
-  }
 }
 
 #[cfg(test)]
@@ -1050,7 +1041,6 @@ mod tests {
       ("RMQ_USERNAME", "rmq username"),
       ("RMQ_PASSWORD", "rmq password"),
       ("RMQ_EXCHANGE", "rmq exchange"),
-      ("ORD_API_URL", "http://127.0.0.1:8080"),
     ]
       .into_iter()
       .map(|(key, value)| (key.into(), value.into()))
@@ -1098,7 +1088,6 @@ mod tests {
         rabbitmq_username: Some("rmq username".into()),
         rabbitmq_password: Some("rmq password".into()),
         rabbitmq_exchange: Some("rmq exchange".into()),
-        ord_api_url: Some("http://127.0.0.1:8080".into()),
       }
     );
   }
@@ -1135,7 +1124,6 @@ mod tests {
           "--rabbitmq-username=rmq username",
           "--rabbitmq-password=rmq password",
           "--rabbitmq-exchange=rmq exchange",
-          "--ord-api-url=http://127.0.0.1:8080",
         ])
         .unwrap()
       ),
@@ -1168,7 +1156,6 @@ mod tests {
         rabbitmq_username: Some("rmq username".into()),
         rabbitmq_password: Some("rmq password".into()),
         rabbitmq_exchange: Some("rmq exchange".into()),
-        ord_api_url: Some("http://127.0.0.1:8080".into()),
       }
     );
   }

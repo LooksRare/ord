@@ -1,0 +1,40 @@
+version: '3.8'
+services:
+
+  db:
+    image: "postgres:15.3"
+    volumes:
+      - ./db/volume:/var/lib/postgresql/data
+    ports:
+      - "55432:5432"
+    environment:
+      POSTGRES_USER: backend
+      POSTGRES_PASSWORD: looks-backend
+      POSTGRES_DB: ordinals
+      POSTGRES_PORT: 5432
+
+  db-setup:
+    image: postgres:15.3
+    depends_on:
+      - db
+    command: >
+      bash -c '
+      until pg_isready -h db -U $$POSTGRES_USER; do
+        echo "Waiting for PostgreSQL to start...";
+        sleep 1;
+      done;
+      echo "Applying config.sql to set up the database...";
+      psql -h db -U $$POSTGRES_USER -d postgres -q -f /db/config.sql;
+      echo "Applying migrations...";
+      for file in /db/migrations/*/*.sql; do
+        echo "Applying $$file";
+        psql -h db -U $$POSTGRES_USER -d $$POSTGRES_DB -q -f $$file;
+      done;
+      '
+    environment:
+      PGOPTIONS: '--client-min-messages=error'
+      POSTGRES_USER: backend
+      POSTGRES_DB: ordinals
+      PGPASSWORD: looks-backend
+    volumes:
+      - "./db:/db"

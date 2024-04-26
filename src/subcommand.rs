@@ -1,5 +1,6 @@
 use crate::event_publisher::EventPublisher;
 use crate::ord_api_client::OrdApiClient;
+use crate::ord_db_client::OrdDbClient;
 
 use super::*;
 
@@ -90,8 +91,7 @@ impl Subcommand {
         server.run(settings, index, handle)
       }
       Self::EventConsumer(event_consumer) => {
-        let ord_api_client = OrdApiClient::run(&settings)?;
-        event_consumer.run(&settings, ord_api_client)
+        event_consumer.run(&settings)
       }
       Self::Settings => settings::run(settings),
       Self::Subsidy(subsidy) => subsidy.run(),
