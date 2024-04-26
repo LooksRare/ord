@@ -90,8 +90,6 @@ pub struct Options {
   pub(crate) rabbitmq_password: Option<String>,
   #[arg(long, help = "RMQ exchange to publish index events.")]
   pub(crate) rabbitmq_exchange: Option<String>,
-  #[arg(long, help = "RMQ queue to consume index events.")]
-  pub(crate) rabbitmq_queue: Option<String>,
   #[arg(long, short, help = "Use regtest. Equivalent to `--chain regtest`.")]
   pub(crate) regtest: bool,
   #[arg(long, short, help = "Use signet. Equivalent to `--chain signet`.")]
