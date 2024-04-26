@@ -4,6 +4,7 @@ use futures::StreamExt;
 use lapin::{options::*, types::FieldTable, Connection, ConnectionProperties};
 use tokio::runtime::Runtime;
 
+use crate::index::event::Event;
 use crate::settings::Settings;
 use crate::subcommand::SubcommandResult;
 
@@ -51,15 +52,29 @@ impl EventConsumer {
 
       log::info!("Starting to consume messages from {}", queue);
       while let Some(delivery) = consumer.next().await {
-        let delivery = delivery.expect("error in consumer");
-        log::info!(
-          "Received message: {:?}",
-          String::from_utf8_lossy(&delivery.data)
-        );
-        delivery
-          .ack(BasicAckOptions::default())
-          .await
-          .expect("confirms rmq msg received");
+        match delivery {
+          Ok(delivery) => {
+            let event: Result<Event, _> = serde_json::from_slice(&delivery.data);
+            match event {
+              Ok(event) => {
+                log::info!("Received event: {:?}", event);
+                delivery
+                  .ack(BasicAckOptions::default())
+                  .await
+                  .expect("confirms rmq msg received");
+              }
+              Err(e) => {
+                log::error!("Error deserializing event: {}", e);
+                delivery
+                  .reject(BasicRejectOptions { requeue: false })
+                  .await?;
+              }
+            }
+          }
+          Err(e) => {
+            log::error!("Error receiving delivery: {}", e);
+          }
+        }
       }
 
       Ok(None)
