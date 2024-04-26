@@ -63,7 +63,6 @@ impl EventPublisher {
       })
     });
 
-    receiver.join().expect("spawn blocking event rx thread");
 
     Ok(EventPublisher { sender: tx })
   }
