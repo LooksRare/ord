@@ -1040,7 +1040,6 @@ mod tests {
       ("RMQ_USERNAME", "rmq username"),
       ("RMQ_PASSWORD", "rmq password"),
       ("RMQ_EXCHANGE", "rmq exchange"),
-      ("RMQ_QUEUE", "rmq queue"),
     ]
     .into_iter()
     .map(|(key, value)| (key.into(), value.into()))
@@ -1124,7 +1123,6 @@ mod tests {
           "--rabbitmq-username=rmq username",
           "--rabbitmq-password=rmq password",
           "--rabbitmq-exchange=rmq exchange",
-          "--rabbitmq-queue=rmq queue",
         ])
         .unwrap()
       ),
