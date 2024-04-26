@@ -104,6 +104,7 @@ mod blocktime;
 pub mod chain;
 pub mod decimal;
 mod deserialize_from_str;
+mod event_publisher;
 mod fee_rate;
 pub mod index;
 mod inscriptions;
@@ -120,7 +121,6 @@ pub mod subcommand;
 mod tally;
 pub mod templates;
 pub mod wallet;
-mod event_publisher;
 
 type Result<T = (), E = Error> = std::result::Result<T, E>;
 
