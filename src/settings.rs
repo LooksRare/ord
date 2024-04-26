@@ -589,7 +589,6 @@ impl Settings {
 
     Some(format!("amqp://{}:{}@{}", user, pass, url))
   }
-
 }
 
 #[cfg(test)]

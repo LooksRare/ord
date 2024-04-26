@@ -90,9 +90,7 @@ impl Subcommand {
         LISTENERS.lock().unwrap().push(handle.clone());
         server.run(settings, index, handle)
       }
-      Self::EventConsumer(event_consumer) => {
-        event_consumer.run(&settings)
-      }
+      Self::EventConsumer(event_consumer) => event_consumer.run(&settings),
       Self::Settings => settings::run(settings),
       Self::Subsidy(subsidy) => subsidy.run(),
       Self::Supply => supply::run(),

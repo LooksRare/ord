@@ -1,17 +1,17 @@
 use anyhow::Context;
 use clap::Parser;
 use futures::StreamExt;
-use lapin::{Connection, ConnectionProperties, options::*, types::FieldTable};
+use lapin::{options::*, types::FieldTable, Connection, ConnectionProperties};
 use tokio::runtime::Runtime;
 
 use ordinals::SatPoint;
 
 use crate::index::event::Event;
-use crate::InscriptionId;
 use crate::ord_api_client::OrdApiClient;
 use crate::ord_db_client::OrdDbClient;
 use crate::settings::Settings;
 use crate::subcommand::SubcommandResult;
+use crate::InscriptionId;
 
 #[derive(Debug, Parser, Clone)]
 pub struct EventConsumer {
