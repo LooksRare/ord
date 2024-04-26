@@ -104,6 +104,7 @@ mod blocktime;
 pub mod chain;
 pub mod decimal;
 mod deserialize_from_str;
+mod event_consumer;
 mod event_publisher;
 mod fee_rate;
 pub mod index;
