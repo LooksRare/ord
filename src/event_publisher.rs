@@ -43,6 +43,8 @@ impl EventPublisher {
         while let Some(event) = rx.recv().await {
           let message = serde_json::to_vec(&event).expect("failed to serialize event");
 
+          log::info!("publishing event: {:#?}", event);
+
           let publish = channel
             .basic_publish(
               &exchange,

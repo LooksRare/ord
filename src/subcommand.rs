@@ -76,6 +76,7 @@ impl Subcommand {
         server.run(settings, index, handle)
       }
       Self::EventServer(server) => {
+        log::info!("Starting event server");
         let publisher = EventPublisher::run(&settings)?;
         let handle = axum_server::Handle::new();
         let index = Arc::new(Index::open_with_event_sender(
