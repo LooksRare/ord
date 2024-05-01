@@ -7,6 +7,7 @@ use clap::Parser;
 use futures::StreamExt;
 use lapin::{Connection, ConnectionProperties, options::*, types::FieldTable};
 use rand::distributions::DistString;
+use sqlx::postgres::PgPoolOptions;
 use tokio::runtime::Runtime;
 
 use crate::index::event::Event;
@@ -49,7 +50,12 @@ impl EventConsumer {
         .database_url
         .as_deref()
         .context("db url must be defined")?;
-      let ord_db_client = Arc::new(OrdDbClient::run(database_url).await?);
+      let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(database_url)
+        .await?;
+      let shared_pool = Arc::new(pool);
+      let ord_db_client = Arc::new(OrdDbClient::new(shared_pool.clone()));
 
       let blocks_queue = self.blocks_queue.as_deref().context("rabbitmq blocks queue path must be defined")?;
       let blocks_queue_str = blocks_queue.to_string();
@@ -73,10 +79,15 @@ impl EventConsumer {
 
       let _ = tokio::try_join!(blocks_consumer_handle, inscriptions_consumer_handle);
 
-      // TODO handle shutdown?
-      // let mut sigterm = signal(SignalKind::terminate()).expect("Failed to bind signal handler");
-      // sigterm.recv().await;
-      // log::info!("Termination signal received, shutting down.");
+      // let mut sigterm = signal(SignalKind::terminate())?;
+      // tokio::select! {
+      //   _ = sigterm.recv() => {
+      //       log::info!("Signal received, shutting down.");
+      //       shared_pool.close().await;
+      //       blocks_channel.close(200, "Closing channel").await?;
+      //       inscriptions_channel.close(200, "Closing channel").await?;
+      //   },
+      // }
 
       Ok(None)
     })

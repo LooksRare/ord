@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use sqlx::PgPool;
 
 use ordinals::SatPoint;
@@ -5,16 +7,12 @@ use ordinals::SatPoint;
 use crate::InscriptionId;
 
 pub struct OrdDbClient {
-  pool: PgPool,
+  pool: Arc<PgPool>,
 }
 
 impl OrdDbClient {
-  pub async fn run(database_url: &str) -> anyhow::Result<Self> {
-    let pool = PgPool::connect(database_url).await?;
-
-    // TODO handle shutdown?
-
-    Ok(OrdDbClient { pool })
+  pub fn new(pool: Arc<PgPool>) -> Self {
+    Self { pool }
   }
 
   pub async fn sync_blocks(&self,
@@ -35,7 +33,7 @@ impl OrdDbClient {
       .bind(*block_height as i64)
       .bind(inscription_id.to_string())
       .bind(location.map(|loc| loc.to_string()))
-      .execute(&self.pool)
+      .execute(&*self.pool)
       .await?;
     Ok(())
   }
@@ -52,7 +50,7 @@ impl OrdDbClient {
       .bind(inscription_id.to_string())
       .bind(new_location.to_string())
       .bind(old_location.to_string())
-      .execute(&self.pool)
+      .execute(&*self.pool)
       .await?;
     Ok(())
   }
