@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
+use lapin::{BasicProperties, Connection, ConnectionProperties, options::BasicPublishOptions};
 use lapin::options::ConfirmSelectOptions;
-use lapin::{options::BasicPublishOptions, BasicProperties, Connection, ConnectionProperties};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 
@@ -46,7 +46,7 @@ impl EventPublisher {
           let publish = channel
             .basic_publish(
               &exchange,
-              "",
+              EventPublisher::type_name(&event),
               BasicPublishOptions::default(),
               &message,
               BasicProperties::default(),
@@ -62,5 +62,17 @@ impl EventPublisher {
     });
 
     Ok(EventPublisher { sender: tx })
+  }
+
+  fn type_name(event: &Event) -> &'static str {
+    match event {
+      Event::InscriptionCreated { .. } => "InscriptionCreated",
+      Event::InscriptionTransferred { .. } => "InscriptionTransferred",
+      Event::RuneBurned { .. } => "RuneBurned",
+      Event::RuneEtched { .. } => "RuneEtched",
+      Event::RuneMinted { .. } => "RuneMinted",
+      Event::RuneTransferred { .. } => "RuneTransferred",
+      Event::BlockCommitted { .. } => "BlockCommitted",
+    }
   }
 }

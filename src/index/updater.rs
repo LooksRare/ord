@@ -1,8 +1,8 @@
 use {
   self::{inscription_updater::InscriptionUpdater, rune_updater::RuneUpdater},
-  super::{fetcher::Fetcher, *},
   futures::future::try_join_all,
   std::sync::mpsc,
+  super::{*, fetcher::Fetcher},
   tokio::sync::mpsc::{error::TryRecvError, Receiver, Sender},
 };
 
@@ -738,6 +738,12 @@ impl<'index> Updater<'index> {
     wtx.commit()?;
 
     Reorg::update_savepoints(self.index, self.height)?;
+
+    if let Some(sender) = self.index.event_sender.as_ref() {
+      sender.blocking_send(Event::BlockCommitted {
+        block_height: self.height,
+      })?;
+    }
 
     Ok(())
   }
