@@ -137,8 +137,12 @@ impl EventConsumer {
     let event: Result<Event, _> = serde_json::from_slice(&delivery.data);
     match event {
       Ok(event) => {
-        EventConsumer::process_event(event, ord_db_client).await?;
-        delivery.ack(BasicAckOptions::default()).await?;
+        if let Err(err) = EventConsumer::process_event(event, ord_db_client).await {
+          log::error!("Failed to process event: {}", err);
+          delivery.reject(BasicRejectOptions { requeue: false }).await?;
+        } else {
+          delivery.ack(BasicAckOptions::default()).await?;
+        }
       }
       Err(e) => {
         log::error!("Failed to deserialize event, rejecting: {}", e);
