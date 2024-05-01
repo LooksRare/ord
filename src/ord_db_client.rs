@@ -9,12 +9,19 @@ pub struct OrdDbClient {
 }
 
 impl OrdDbClient {
-  pub async fn run(database_url: &str) -> anyhow::Result<Self, anyhow::Error> {
-    let pool = PgPool::connect(database_url)
-      .await
-      .expect("connects to db ok");
+  pub async fn run(database_url: &str) -> anyhow::Result<Self> {
+    let pool = PgPool::connect(database_url).await?;
+
+    // TODO handle shutdown?
 
     Ok(OrdDbClient { pool })
+  }
+
+  pub async fn sync_blocks(&self,
+                           block_height: &u32) -> Result<(), sqlx::Error> {
+    log::info!("Block committed event {}", block_height);
+    // TODO consume all blocks from this to last consumed
+    Ok(())
   }
 
   pub async fn save_inscription_created(&self,
@@ -48,5 +55,4 @@ impl OrdDbClient {
       .await?;
     Ok(())
   }
-
 }

@@ -1,7 +1,12 @@
+use std::sync::Arc;
+
 use anyhow::Context;
+use bitcoin::secp256k1::rand::distributions::Alphanumeric;
+use chrono::Utc;
 use clap::Parser;
 use futures::StreamExt;
 use lapin::{Connection, ConnectionProperties, options::*, types::FieldTable};
+use rand::distributions::DistString;
 use tokio::runtime::Runtime;
 
 use crate::index::event::Event;
@@ -11,8 +16,10 @@ use crate::subcommand::SubcommandResult;
 
 #[derive(Debug, Parser, Clone)]
 pub struct EventConsumer {
-  #[arg(long, help = "RMQ queue to consume index events.")]
-  pub(crate) rabbitmq_queue: Option<String>,
+  #[arg(long, help = "RMQ queue to consume blocks.")]
+  pub(crate) blocks_queue: Option<String>,
+  #[arg(long, help = "RMQ queue to consume inscription events.")]
+  pub(crate) inscriptions_queue: Option<String>,
   #[arg(long, help = "DB url to persist inscriptions.")]
   pub(crate) database_url: Option<String>,
 }
@@ -23,11 +30,6 @@ impl EventConsumer {
       let addr = settings
         .rabbitmq_addr()
         .context("rabbitmq amqp credentials and url must be defined")?;
-
-      let queue = self
-        .rabbitmq_queue
-        .as_deref()
-        .context("rabbitmq queue path must be defined")?;
 
       let conn = Connection::connect(&addr, ConnectionProperties::default())
         .await
@@ -43,85 +45,110 @@ impl EventConsumer {
         .await
         .expect("enable msg confirms");
 
-      let mut consumer = channel
-        .basic_consume(
-          &queue,
-          "lr-ord", //TODO pod name
-          BasicConsumeOptions::default(),
-          FieldTable::default(),
-        )
-        .await
-        .expect("creates rmq consumer");
-
       let database_url = self
         .database_url
         .as_deref()
         .context("db url must be defined")?;
-      let ord_db_client = OrdDbClient::run(database_url).await?;
+      let ord_db_client = Arc::new(OrdDbClient::run(database_url).await?);
 
-      log::info!("Starting to consume messages from {}", queue);
-      while let Some(delivery) = consumer.next().await {
-        match delivery {
-          Ok(delivery) => {
-            let event: Result<Event, _> = serde_json::from_slice(&delivery.data);
-            match event {
-              Ok(event) => {
-                self
-                  .handle_event(&ord_db_client, &event)
-                  .await
-                  .expect("confirms rmq msg processed");
-                delivery
-                  .ack(BasicAckOptions::default())
-                  .await
-                  .expect("confirms rmq msg received");
-              }
-              Err(e) => {
-                log::error!("Error deserializing event: {}", e);
-                delivery
-                  .reject(BasicRejectOptions { requeue: false })
-                  .await?;
-              }
-            }
-          }
-          Err(e) => {
-            log::error!("Error receiving delivery: {}", e);
-          }
-        }
-      }
+      let blocks_queue = self.blocks_queue.as_deref().context("rabbitmq blocks queue path must be defined")?;
+      let blocks_queue_str = blocks_queue.to_string();
+      let blocks_channel = channel.clone();
+      let blocks_ord_db_client = Arc::clone(&ord_db_client);
+      let blocks_consumer_tag = Self::generate_consumer_tag();
+
+      let inscriptions_queue = self.inscriptions_queue.as_deref().context("rabbitmq inscriptions queue path must be defined")?;
+      let inscriptions_queue_str = inscriptions_queue.to_string();
+      let inscriptions_channel = channel.clone();
+      let inscriptions_ord_db_client = Arc::clone(&ord_db_client);
+      let inscriptions_consumer_tag = Self::generate_consumer_tag();
+
+      let blocks_consumer_handle = tokio::spawn(async move {
+        EventConsumer::consume_queue(blocks_channel, blocks_queue_str, blocks_consumer_tag, blocks_ord_db_client).await
+      });
+
+      let inscriptions_consumer_handle = tokio::spawn(async move {
+        EventConsumer::consume_queue(inscriptions_channel, inscriptions_queue_str, inscriptions_consumer_tag, inscriptions_ord_db_client).await
+      });
+
+      let _ = tokio::try_join!(blocks_consumer_handle, inscriptions_consumer_handle);
+
+      // TODO handle shutdown?
+      // let mut sigterm = signal(SignalKind::terminate()).expect("Failed to bind signal handler");
+      // sigterm.recv().await;
+      // log::info!("Termination signal received, shutting down.");
 
       Ok(None)
     })
   }
 
-  async fn handle_event(
-    &self,
-    ord_db_client: &OrdDbClient,
-    event: &Event,
-  ) -> Result<(), anyhow::Error> {
-    match event {
-      Event::InscriptionCreated {
-        block_height,
-        charms,
-        inscription_id,
-        location,
-        parent_inscription_ids,
-        sequence_number,
-      } => {
-        ord_db_client.save_inscription_created(block_height, inscription_id, location).await?;
-        Ok(())
+  async fn consume_queue(channel: lapin::Channel, queue_name: String, consumer_tag: String, ord_db_client: Arc<OrdDbClient>) -> Result<(), anyhow::Error> {
+    let mut consumer = channel
+      .basic_consume(
+        &queue_name,
+        consumer_tag.as_str(),
+        BasicConsumeOptions::default(),
+        FieldTable::default(),
+      )
+      .await
+      .expect("creates rmq consumer");
+
+    log::info!("Starting to consume messages from {}", queue_name);
+    while let Some(delivery) = consumer.next().await {
+      match delivery {
+        Ok(delivery) => {
+          let event: Result<Event, _> = serde_json::from_slice(&delivery.data);
+          match event {
+            Ok(event) => {
+              match &event {
+                Event::BlockCommitted {
+                  block_height,
+                } => {
+                  ord_db_client.sync_blocks(block_height).await?
+                }
+                Event::InscriptionCreated {
+                  block_height,
+                  charms,
+                  inscription_id,
+                  location,
+                  parent_inscription_ids,
+                  sequence_number,
+                } => {
+                  ord_db_client.save_inscription_created(block_height, inscription_id, location).await?
+                }
+                Event::InscriptionTransferred {
+                  block_height,
+                  inscription_id,
+                  new_location,
+                  old_location,
+                  sequence_number,
+                } => {
+                  ord_db_client.save_inscription_transferred(block_height, inscription_id, new_location, old_location).await?;
+                }
+                _ => {
+                  log::warn!("Received an unhandled event type");
+                }
+              }
+              delivery.ack(BasicAckOptions::default()).await?;
+            }
+            Err(e) => {
+              log::error!("Error deserializing event: {}", e);
+              delivery.reject(BasicRejectOptions { requeue: false }).await?;
+            }
+          }
+        }
+        Err(e) => {
+          log::error!("Error receiving delivery: {}", e);
+        }
       }
-      Event::InscriptionTransferred {
-        block_height,
-        inscription_id,
-        new_location,
-        old_location,
-        sequence_number,
-      } => {
-        ord_db_client.save_inscription_transferred(block_height, inscription_id, new_location, old_location).await?;
-        Ok(())
-      }
-      _ => Ok(()),
     }
+
+    Ok(())
   }
 
+  fn generate_consumer_tag() -> String {
+    // TODO get pod name from k8s?
+    let timestamp = Utc::now().format("%Y%m%d%H%M%S");
+    format!("{}-{}-{}", "lr-ord", timestamp, Alphanumeric.sample_string(&mut rand::thread_rng(), 16))
+  }
 }
