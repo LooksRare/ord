@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
-use lapin::{BasicProperties, Connection, ConnectionProperties, options::BasicPublishOptions};
 use lapin::options::ConfirmSelectOptions;
+use lapin::{options::BasicPublishOptions, BasicProperties, Connection, ConnectionProperties};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 

@@ -1,8 +1,8 @@
 use {
   self::{inscription_updater::InscriptionUpdater, rune_updater::RuneUpdater},
+  super::{fetcher::Fetcher, *},
   futures::future::try_join_all,
   std::sync::mpsc,
-  super::{*, fetcher::Fetcher},
   tokio::sync::mpsc::{error::TryRecvError, Receiver, Sender},
 };
 
@@ -696,7 +696,12 @@ impl<'index> Updater<'index> {
     Ok(())
   }
 
-  fn commit(&mut self, wtx: WriteTransaction, value_cache: HashMap<OutPoint, u64>, uncommitted: usize) -> Result {
+  fn commit(
+    &mut self,
+    wtx: WriteTransaction,
+    value_cache: HashMap<OutPoint, u64>,
+    uncommitted: usize,
+  ) -> Result {
     log::info!(
       "Committing at block height {}, {} outputs traversed, {} in map, {} cached",
       self.height,

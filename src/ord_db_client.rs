@@ -15,19 +15,25 @@ impl OrdDbClient {
     Self { pool }
   }
 
-  pub async fn sync_blocks(&self,
-                           from_height: &u32,
-                           to_height: &u32) -> Result<(), sqlx::Error> {
+  pub async fn sync_blocks(&self, from_height: &u32, to_height: &u32) -> Result<(), sqlx::Error> {
     log::info!("Blocks committed event from={from_height} (excluded), to={to_height} (included)");
     // TODO consume all blocks from this to last consumed
     Ok(())
   }
 
-  pub async fn save_inscription_created(&self,
-                                        block_height: &u32,
-                                        inscription_id: &InscriptionId,
-                                        location: &Option<SatPoint>) -> Result<(), sqlx::Error> {
-    let query = "INSERT INTO events (type_id, block_height, inscription_id, location) VALUES ($1, $2, $3, $4)";
+  pub async fn save_inscription_created(
+    &self,
+    block_height: &u32,
+    inscription_id: &InscriptionId,
+    location: &Option<SatPoint>,
+  ) -> Result<(), sqlx::Error> {
+    let query = "
+        INSERT INTO events (type_id, block_height, inscription_id, location)
+        SELECT $1, $2, $3, $4
+        WHERE NOT EXISTS (
+            SELECT 1 FROM events
+            WHERE type_id = $1 AND block_height = $2 AND inscription_id = $3 AND location = $4
+        )";
     sqlx::query(query)
       .bind(1_i32) // Type ID for InscriptionCreated
       .bind(*block_height as i64)
@@ -38,12 +44,20 @@ impl OrdDbClient {
     Ok(())
   }
 
-  pub async fn save_inscription_transferred(&self,
-                                            block_height: &u32,
-                                            inscription_id: &InscriptionId,
-                                            new_location: &SatPoint,
-                                            old_location: &SatPoint) -> Result<(), sqlx::Error> {
-    let query = "INSERT INTO events (type_id, block_height, inscription_id, location, old_location) VALUES ($1, $2, $3, $4, $5)";
+  pub async fn save_inscription_transferred(
+    &self,
+    block_height: &u32,
+    inscription_id: &InscriptionId,
+    new_location: &SatPoint,
+    old_location: &SatPoint,
+  ) -> Result<(), sqlx::Error> {
+    let query = "
+        INSERT INTO events (type_id, block_height, inscription_id, location, old_location)
+        SELECT $1, $2, $3, $4, $5
+        WHERE NOT EXISTS (
+            SELECT 1 FROM events
+            WHERE type_id = $1 AND block_height = $2 AND inscription_id = $3 AND location = $4 AND old_location = $5
+        )";
     sqlx::query(query)
       .bind(2_i32) // Type ID for InscriptionTransferred
       .bind(*block_height as i64)
