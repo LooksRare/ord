@@ -1,6 +1,8 @@
 use sqlx::PgPool;
 
-use crate::api::Inscription;
+use ordinals::SatPoint;
+
+use crate::InscriptionId;
 
 pub struct OrdDbClient {
   pool: PgPool,
@@ -15,59 +17,36 @@ impl OrdDbClient {
     Ok(OrdDbClient { pool })
   }
 
-  pub async fn save_inscription(&self, inscription: Inscription) -> Result<(), sqlx::Error> {
-    log::info!("Saving inscription detailed response: {:?}", inscription);
-
-    let genesis_id = format!("{}i{}", inscription.id.txid, inscription.id.index);
-    let parents = inscription
-      .parents
-      .iter()
-      .map(|pid| format!("{}i{}", pid.txid, pid.index))
-      .collect::<Vec<_>>()
-      .join(",");
-
-    let sql = "
-        INSERT INTO inscriptions (
-            genesis_id,
-            number,
-            sat_ordinal,
-            sat_rarity,
-            sat_coinbase_height,
-            mime_type,
-            content_type,
-            content_length,
-            content,
-            fee,
-            curse_type,
-            classic_number,
-            metadata,
-            parent
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-    ";
-
-    sqlx::query(sql)
-      .bind(genesis_id)
-      .bind(inscription.number as i64)
-      .bind(inscription.sat.map_or(0, |s| s.0 as i64))
-      .bind("")
-      .bind(inscription.height as i64)
-      .bind(
-        inscription
-          .effective_content_type
-          .clone()
-          .unwrap_or_default(),
-      )
-      .bind(inscription.content_type.clone().unwrap_or_default())
-      .bind(inscription.content_length.map_or(0, |len| len as i64))
-      .bind(vec![] as Vec<u8>)
-      .bind(inscription.fee as i64)
-      .bind("")
-      .bind(0)
-      .bind("")
-      .bind(parents)
+  pub async fn save_inscription_created(&self,
+                                        block_height: &u32,
+                                        inscription_id: &InscriptionId,
+                                        location: &Option<SatPoint>) -> Result<(), sqlx::Error> {
+    let query = "INSERT INTO events (type_id, block_height, inscription_id, location) VALUES ($1, $2, $3, $4)";
+    sqlx::query(query)
+      .bind(1_i32) // Type ID for InscriptionCreated
+      .bind(*block_height as i64)
+      .bind(inscription_id.to_string())
+      .bind(location.map(|loc| loc.to_string()))
       .execute(&self.pool)
       .await?;
-
     Ok(())
   }
+
+  pub async fn save_inscription_transferred(&self,
+                                            block_height: &u32,
+                                            inscription_id: &InscriptionId,
+                                            new_location: &SatPoint,
+                                            old_location: &SatPoint) -> Result<(), sqlx::Error> {
+    let query = "INSERT INTO events (type_id, block_height, inscription_id, location, old_location) VALUES ($1, $2, $3, $4, $5)";
+    sqlx::query(query)
+      .bind(2_i32) // Type ID for InscriptionTransferred
+      .bind(*block_height as i64)
+      .bind(inscription_id.to_string())
+      .bind(new_location.to_string())
+      .bind(old_location.to_string())
+      .execute(&self.pool)
+      .await?;
+    Ok(())
+  }
+
 }

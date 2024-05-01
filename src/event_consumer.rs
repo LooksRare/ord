@@ -1,24 +1,18 @@
 use anyhow::Context;
 use clap::Parser;
 use futures::StreamExt;
-use lapin::{options::*, types::FieldTable, Connection, ConnectionProperties};
+use lapin::{Connection, ConnectionProperties, options::*, types::FieldTable};
 use tokio::runtime::Runtime;
 
-use ordinals::SatPoint;
-
 use crate::index::event::Event;
-use crate::ord_api_client::OrdApiClient;
 use crate::ord_db_client::OrdDbClient;
 use crate::settings::Settings;
 use crate::subcommand::SubcommandResult;
-use crate::InscriptionId;
 
 #[derive(Debug, Parser, Clone)]
 pub struct EventConsumer {
   #[arg(long, help = "RMQ queue to consume index events.")]
   pub(crate) rabbitmq_queue: Option<String>,
-  #[arg(long, help = "Ord api url to fetch inscriptions.")]
-  pub(crate) ord_api_url: Option<String>,
   #[arg(long, help = "DB url to persist inscriptions.")]
   pub(crate) database_url: Option<String>,
 }
@@ -59,12 +53,6 @@ impl EventConsumer {
         .await
         .expect("creates rmq consumer");
 
-      let ord_api_url = self
-        .ord_api_url
-        .clone()
-        .context("ord api url must be defined")?;
-      let ord_api_client = OrdApiClient::run(ord_api_url)?;
-
       let database_url = self
         .database_url
         .as_deref()
@@ -79,7 +67,7 @@ impl EventConsumer {
             match event {
               Ok(event) => {
                 self
-                  .handle_event(&ord_api_client, &ord_db_client, &event)
+                  .handle_event(&ord_db_client, &event)
                   .await
                   .expect("confirms rmq msg processed");
                 delivery
@@ -107,7 +95,6 @@ impl EventConsumer {
 
   async fn handle_event(
     &self,
-    ord_api_client: &OrdApiClient,
     ord_db_client: &OrdDbClient,
     event: &Event,
   ) -> Result<(), anyhow::Error> {
@@ -120,18 +107,8 @@ impl EventConsumer {
         parent_inscription_ids,
         sequence_number,
       } => {
-        self
-          .handle_inscription_created(
-            ord_api_client,
-            ord_db_client,
-            block_height,
-            charms,
-            inscription_id,
-            location,
-            parent_inscription_ids,
-            sequence_number,
-          )
-          .await
+        ord_db_client.save_inscription_created(block_height, inscription_id, location).await?;
+        Ok(())
       }
       Event::InscriptionTransferred {
         block_height,
@@ -140,63 +117,11 @@ impl EventConsumer {
         old_location,
         sequence_number,
       } => {
-        self
-          .handle_inscription_transferred(
-            ord_api_client,
-            ord_db_client,
-            block_height,
-            inscription_id,
-            new_location,
-            old_location,
-            sequence_number,
-          )
-          .await
+        ord_db_client.save_inscription_transferred(block_height, inscription_id, new_location, old_location).await?;
+        Ok(())
       }
       _ => Ok(()),
     }
   }
 
-  async fn handle_inscription_created(
-    &self,
-    ord_api_client: &OrdApiClient,
-    ord_db_client: &OrdDbClient,
-    block_height: &u32,
-    charms: &u16,
-    inscription_id: &InscriptionId,
-    location: &Option<SatPoint>,
-    parent_inscription_ids: &Vec<InscriptionId>,
-    sequence_number: &u32,
-  ) -> Result<(), anyhow::Error> {
-    log::info!("Received inscription created event: {:?}", inscription_id);
-    match ord_api_client
-      .fetch_inscription_details(inscription_id)
-      .await
-    {
-      Ok(inscription) => {
-        log::info!("Received inscription detailed response: {:?}", inscription);
-        ord_db_client.save_inscription(inscription).await?;
-      }
-      Err(e) => {
-        log::error!("Failed to fetch: {:?}", e);
-      }
-    };
-    Ok(())
-  }
-
-  async fn handle_inscription_transferred(
-    &self,
-    ord_api_client: &OrdApiClient,
-    ord_db_client: &OrdDbClient,
-    block_height: &u32,
-    inscription_id: &InscriptionId,
-    new_location: &SatPoint,
-    old_location: &SatPoint,
-    sequence_number: &u32,
-  ) -> Result<(), anyhow::Error> {
-    log::info!(
-      "Received inscription transferred event: {:?}",
-      inscription_id
-    );
-    Ok(())
-  }
 }

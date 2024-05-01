@@ -1,23 +1,13 @@
-create table inscriptions
+CREATE TABLE events
 (
-    id                  bigserial
-        primary key,
-    genesis_id          text                                   not null, --TODO tx_id + index, should be unique
-    number              bigint                                 not null  --TODO jubilee number, uniqueness depends on indexer implementation
-        constraint inscriptions_number_unique
-            unique,
-    sat_ordinal         numeric                                not null,
-    sat_rarity          text                                   not null,
-    sat_coinbase_height bigint                                 not null,
-    mime_type           text                                   not null, --TODO not sure we need it
-    content_type        text                                   not null,
-    content_length      bigint                                 not null, --TODO not sure we need it
-    content             bytea                                  not null, --TODO should be moved to S3
-    fee                 numeric                                not null, --TODO mint fee should belong to event?
-    curse_type          text,
-    updated_at          timestamp with time zone default now() not null,
-    recursive           boolean                  default false,
-    classic_number      bigint,
-    metadata            text,                                            --TODO needs structuring, currently dump of whatever
-    parent              text                                             --genesis_id of another inscription, used to create "collections"
+  id             SERIAL PRIMARY KEY,
+  type_id        SMALLINT NOT NULL, --1,InscriptionCreated;2,InscriptionTransferred
+  block_height   BIGINT   NOT NULL,
+  inscription_id TEXT     NOT NULL,
+  location       TEXT,              -- Will hold either 'location' or 'new_location' based on type
+  old_location   TEXT,              -- Only used for InscriptionTransferred
+  created_at     TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX idx_events_block_height ON events (block_height);
+CREATE INDEX idx_events_inscription_id ON events (inscription_id);
