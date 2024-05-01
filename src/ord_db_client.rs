@@ -18,8 +18,9 @@ impl OrdDbClient {
   }
 
   pub async fn sync_blocks(&self,
-                           block_height: &u32) -> Result<(), sqlx::Error> {
-    log::info!("Block committed event {}", block_height);
+                           from_height: &u32,
+                           to_height: &u32) -> Result<(), sqlx::Error> {
+    log::info!("Blocks committed event from={from_height} (excluded), to={to_height} (included)");
     // TODO consume all blocks from this to last consumed
     Ok(())
   }

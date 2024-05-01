@@ -102,9 +102,10 @@ impl EventConsumer {
             Ok(event) => {
               match &event {
                 Event::BlockCommitted {
-                  block_height,
+                  from_height,
+                  to_height,
                 } => {
-                  ord_db_client.sync_blocks(block_height).await?
+                  ord_db_client.sync_blocks(from_height, to_height).await?
                 }
                 Event::InscriptionCreated {
                   block_height,
