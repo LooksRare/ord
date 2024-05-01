@@ -9,6 +9,7 @@ use lapin::{Connection, ConnectionProperties, options::*, types::FieldTable};
 use rand::distributions::DistString;
 use sqlx::postgres::PgPoolOptions;
 use tokio::runtime::Runtime;
+use tokio::sync::oneshot;
 
 use crate::index::event::Event;
 use crate::ord_db_client::OrdDbClient;
@@ -62,38 +63,41 @@ impl EventConsumer {
       let blocks_channel = channel.clone();
       let blocks_ord_db_client = Arc::clone(&ord_db_client);
       let blocks_consumer_tag = Self::generate_consumer_tag();
+      let (blocks_shutdown_tx, blocks_shutdown_rx) = oneshot::channel::<()>();
 
       let inscriptions_queue = self.inscriptions_queue.as_deref().context("rabbitmq inscriptions queue path must be defined")?;
       let inscriptions_queue_str = inscriptions_queue.to_string();
       let inscriptions_channel = channel.clone();
       let inscriptions_ord_db_client = Arc::clone(&ord_db_client);
       let inscriptions_consumer_tag = Self::generate_consumer_tag();
+      let (inscriptions_shutdown_tx, inscriptions_shutdown_rx) = oneshot::channel::<()>();
 
       let blocks_consumer_handle = tokio::spawn(async move {
-        EventConsumer::consume_queue(blocks_channel, blocks_queue_str, blocks_consumer_tag, blocks_ord_db_client).await
+        EventConsumer::consume_queue(blocks_channel, blocks_queue_str, blocks_consumer_tag, blocks_ord_db_client, blocks_shutdown_rx).await
       });
 
       let inscriptions_consumer_handle = tokio::spawn(async move {
-        EventConsumer::consume_queue(inscriptions_channel, inscriptions_queue_str, inscriptions_consumer_tag, inscriptions_ord_db_client).await
+        EventConsumer::consume_queue(inscriptions_channel, inscriptions_queue_str, inscriptions_consumer_tag, inscriptions_ord_db_client, inscriptions_shutdown_rx).await
       });
 
+      let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+      sigterm.recv().await;
+      let _ = blocks_shutdown_tx.send(());
+      let _ = inscriptions_shutdown_tx.send(());
       let _ = tokio::try_join!(blocks_consumer_handle, inscriptions_consumer_handle);
 
-      // let mut sigterm = signal(SignalKind::terminate())?;
-      // tokio::select! {
-      //   _ = sigterm.recv() => {
-      //       log::info!("Signal received, shutting down.");
-      //       shared_pool.close().await;
-      //       blocks_channel.close(200, "Closing channel").await?;
-      //       inscriptions_channel.close(200, "Closing channel").await?;
-      //   },
-      // }
+      shared_pool.close().await;
 
       Ok(None)
     })
   }
 
-  async fn consume_queue(channel: lapin::Channel, queue_name: String, consumer_tag: String, ord_db_client: Arc<OrdDbClient>) -> Result<(), anyhow::Error> {
+  async fn consume_queue(channel: lapin::Channel,
+                         queue_name: String,
+                         consumer_tag: String,
+                         ord_db_client: Arc<OrdDbClient>,
+                         mut shutdown_signal: oneshot::Receiver<()>,
+  ) -> Result<(), anyhow::Error> {
     let mut consumer = channel
       .basic_consume(
         &queue_name,
@@ -105,49 +109,16 @@ impl EventConsumer {
       .expect("creates rmq consumer");
 
     log::info!("Starting to consume messages from {}", queue_name);
-    while let Some(delivery) = consumer.next().await {
-      match delivery {
+    while let Some(result) = consumer.next().await {
+      match result {
         Ok(delivery) => {
-          let event: Result<Event, _> = serde_json::from_slice(&delivery.data);
-          match event {
-            Ok(event) => {
-              match &event {
-                Event::BlockCommitted {
-                  from_height,
-                  to_height,
-                } => {
-                  ord_db_client.sync_blocks(from_height, to_height).await?
-                }
-                Event::InscriptionCreated {
-                  block_height,
-                  charms,
-                  inscription_id,
-                  location,
-                  parent_inscription_ids,
-                  sequence_number,
-                } => {
-                  ord_db_client.save_inscription_created(block_height, inscription_id, location).await?
-                }
-                Event::InscriptionTransferred {
-                  block_height,
-                  inscription_id,
-                  new_location,
-                  old_location,
-                  sequence_number,
-                } => {
-                  ord_db_client.save_inscription_transferred(block_height, inscription_id, new_location, old_location).await?;
-                }
-                _ => {
-                  log::warn!("Received an unhandled event type");
-                }
-              }
-              delivery.ack(BasicAckOptions::default()).await?;
+          tokio::select! {
+                _ = EventConsumer::handle_delivery(delivery, &ord_db_client) => {},
+                _ = &mut shutdown_signal => {
+                    log::info!("Shutdown signal received, stopping consumer.");
+                    break;
+                },
             }
-            Err(e) => {
-              log::error!("Error deserializing event: {}", e);
-              delivery.reject(BasicRejectOptions { requeue: false }).await?;
-            }
-          }
         }
         Err(e) => {
           log::error!("Error receiving delivery: {}", e);
@@ -155,6 +126,60 @@ impl EventConsumer {
       }
     }
 
+    log::info!("Closing consumer channel {}", queue_name);
+    channel.close(200, "Closing channel due to shutdown").await?;
+
+    Ok(())
+  }
+
+  async fn handle_delivery(delivery: lapin::message::Delivery,
+                           ord_db_client: &Arc<OrdDbClient>) -> Result<(), anyhow::Error> {
+    let event: Result<Event, _> = serde_json::from_slice(&delivery.data);
+    match event {
+      Ok(event) => {
+        EventConsumer::process_event(event, ord_db_client).await?;
+        delivery.ack(BasicAckOptions::default()).await?;
+      }
+      Err(e) => {
+        log::error!("Failed to deserialize event, rejecting: {}", e);
+        delivery.reject(BasicRejectOptions { requeue: false }).await?;
+      }
+    }
+
+    Ok(())
+  }
+
+  async fn process_event(event: Event, ord_db_client: &Arc<OrdDbClient>) -> Result<(), anyhow::Error> {
+    match &event {
+      Event::BlockCommitted {
+        from_height,
+        to_height,
+      } => {
+        ord_db_client.sync_blocks(from_height, to_height).await?
+      }
+      Event::InscriptionCreated {
+        block_height,
+        charms,
+        inscription_id,
+        location,
+        parent_inscription_ids,
+        sequence_number,
+      } => {
+        ord_db_client.save_inscription_created(block_height, inscription_id, location).await?
+      }
+      Event::InscriptionTransferred {
+        block_height,
+        inscription_id,
+        new_location,
+        old_location,
+        sequence_number,
+      } => {
+        ord_db_client.save_inscription_transferred(block_height, inscription_id, new_location, old_location).await?;
+      }
+      _ => {
+        log::warn!("Received an unhandled event type");
+      }
+    }
     Ok(())
   }
 
