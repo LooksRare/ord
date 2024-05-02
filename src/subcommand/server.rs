@@ -1,3 +1,4 @@
+pub(crate) use server_config::ServerConfig;
 use {
   self::{
     accept_encoding::AcceptEncoding,
@@ -39,7 +40,7 @@ use {
   },
 };
 
-pub(crate) use server_config::ServerConfig;
+use crate::api::InscriptionDetails;
 
 mod accept_encoding;
 mod accept_json;
@@ -1520,7 +1521,6 @@ impl Server {
     })
   }
 
-  // TODO need to enhance this api to return all necessary data
   async fn inscription(
     Extension(server_config): Extension<Arc<ServerConfig>>,
     Extension(index): Extension<Arc<Index>>,
@@ -1539,7 +1539,36 @@ impl Server {
         .ok_or_not_found(|| format!("inscription {query}"))?;
 
       Ok(if accept_json {
-        Json(info).into_response()
+        let sat_block_time = info
+          .sat
+          .and_then(|sat| index.block_time(sat.height()).ok())
+          .map(|block_time| block_time.timestamp().timestamp());
+
+        let response = InscriptionDetails {
+          id: info.id,
+          number: info.number,
+          owner: info.address,
+          content_type: info.content_type,
+          content_length: info.content_length,
+          metadata: inscription.metadata,
+          genesis_block_height: info.height,
+          genesis_block_time: info.timestamp,
+          sat_number: info.sat.map(|sat| sat.0),
+          sat_name: info.sat.map(|sat| sat.name()),
+          sat_rarity: info.sat.map(|sat| sat.rarity()),
+          sat_block_height: info.sat.map(|sat| sat.height().0),
+          sat_block_time,
+          satpoint: info.satpoint,
+          value: info.value,
+          fee: info.fee,
+          charms: Charm::Vindicated.unset(info.charms.iter().fold(0, |mut acc, charm| {
+            charm.set(&mut acc);
+            acc
+          })),
+          children: info.children,
+          parents: info.parents,
+        };
+        Json(response).into_response()
       } else {
         InscriptionHtml {
           chain: server_config.chain,

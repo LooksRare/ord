@@ -28,8 +28,11 @@ impl OrdIndexation {
         .fetch_events_by_block_height(block_height)
         .await?;
       for event in events {
-        log::info!("Event: {:?}", event);
-        // let inscription_details = self.ord_api_client.fetch_inscription_details(event.inscription_id).await?;
+        let inscription_details = self
+          .ord_api_client
+          .fetch_inscription_details(event.inscription_id)
+          .await?;
+        log::info!("inscription_details: {:?}", inscription_details);
       }
     }
 
