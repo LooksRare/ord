@@ -1,10 +1,32 @@
 use std::sync::Arc;
 
-use sqlx::PgPool;
+use futures::TryStreamExt;
+use sqlx::{PgPool, Row};
 
 use ordinals::SatPoint;
 
 use crate::InscriptionId;
+
+#[derive(Debug, Clone)]
+pub struct Event {
+  pub type_id: i16,
+  pub block_height: i64,
+  pub inscription_id: String,
+  pub location: Option<String>,
+  pub old_location: Option<String>,
+}
+
+impl Event {
+  fn from_row(row: sqlx::postgres::PgRow) -> Self {
+    Event {
+      type_id: row.get("type_id"),
+      block_height: row.get("block_height"),
+      inscription_id: row.get("inscription_id"),
+      location: row.get("location"),
+      old_location: row.get("old_location"),
+    }
+  }
+}
 
 pub struct OrdDbClient {
   pool: Arc<PgPool>,
@@ -15,10 +37,28 @@ impl OrdDbClient {
     Self { pool }
   }
 
-  pub async fn sync_blocks(&self, from_height: &u32, to_height: &u32) -> Result<(), sqlx::Error> {
-    log::info!("Blocks committed event from={from_height} (excluded), to={to_height} (included)");
-    // TODO consume all blocks from this to last consumed
-    Ok(())
+  pub async fn fetch_events_by_block_height(
+    &self,
+    block_height: u32,
+  ) -> Result<Vec<Event>, sqlx::Error> {
+    let query = "
+        SELECT type_id, block_height, inscription_id, location, old_location
+        FROM events
+        WHERE block_height = $1
+        ORDER BY type_id ASC, id ASC";
+
+    let mut rows = sqlx::query(query)
+      .bind(block_height as i64)
+      .fetch(&*self.pool);
+
+    let mut events = Vec::new();
+
+    while let Some(row) = rows.try_next().await? {
+      let event = Event::from_row(row);
+      events.push(event);
+    }
+
+    Ok(events)
   }
 
   pub async fn save_inscription_created(

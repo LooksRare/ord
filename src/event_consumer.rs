@@ -12,7 +12,9 @@ use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
 
 use crate::index::event::Event;
+use crate::ord_api_client::OrdApiClient;
 use crate::ord_db_client::OrdDbClient;
+use crate::ord_indexation::OrdIndexation;
 use crate::settings::Settings;
 use crate::subcommand::SubcommandResult;
 
@@ -24,6 +26,8 @@ pub struct EventConsumer {
   pub(crate) inscriptions_queue: Option<String>,
   #[arg(long, help = "DB url to persist inscriptions.")]
   pub(crate) database_url: Option<String>,
+  #[arg(long, help = "Ord api url to fetch inscriptions.")]
+  pub(crate) ord_api_url: Option<String>,
 }
 
 impl EventConsumer {
@@ -58,13 +62,22 @@ impl EventConsumer {
       let shared_pool = Arc::new(pool);
       let ord_db_client = Arc::new(OrdDbClient::new(shared_pool.clone()));
 
+      let api_url = self.ord_api_url.context("api url must be defined")?;
+      let ord_api_c = OrdApiClient::new(api_url.clone()).expect("api client must exist");
+      let ord_api_client = Arc::new(ord_api_c);
+
+      let ord_indexation = Arc::new(OrdIndexation::new(
+        Arc::clone(&ord_db_client),
+        Arc::clone(&ord_api_client),
+      ));
+
       let blocks_queue = self
         .blocks_queue
         .as_deref()
         .context("rabbitmq blocks queue path must be defined")?;
       let blocks_queue_str = blocks_queue.to_string();
       let blocks_channel = channel.clone();
-      let blocks_ord_db_client = Arc::clone(&ord_db_client);
+      let blocks_ord_indexation = Arc::clone(&ord_indexation);
       let blocks_consumer_tag = Self::generate_consumer_tag();
       let (blocks_shutdown_tx, blocks_shutdown_rx) = oneshot::channel::<()>();
 
@@ -74,7 +87,7 @@ impl EventConsumer {
         .context("rabbitmq inscriptions queue path must be defined")?;
       let inscriptions_queue_str = inscriptions_queue.to_string();
       let inscriptions_channel = channel.clone();
-      let inscriptions_ord_db_client = Arc::clone(&ord_db_client);
+      let inscriptions_ord_indexation = Arc::clone(&ord_indexation);
       let inscriptions_consumer_tag = Self::generate_consumer_tag();
       let (inscriptions_shutdown_tx, inscriptions_shutdown_rx) = oneshot::channel::<()>();
 
@@ -83,7 +96,7 @@ impl EventConsumer {
           blocks_channel,
           blocks_queue_str,
           blocks_consumer_tag,
-          blocks_ord_db_client,
+          blocks_ord_indexation,
           blocks_shutdown_rx,
         )
         .await
@@ -94,7 +107,7 @@ impl EventConsumer {
           inscriptions_channel,
           inscriptions_queue_str,
           inscriptions_consumer_tag,
-          inscriptions_ord_db_client,
+          inscriptions_ord_indexation,
           inscriptions_shutdown_rx,
         )
         .await
@@ -116,7 +129,7 @@ impl EventConsumer {
     channel: lapin::Channel,
     queue_name: String,
     consumer_tag: String,
-    ord_db_client: Arc<OrdDbClient>,
+    ord_indexation: Arc<OrdIndexation>,
     mut shutdown_signal: oneshot::Receiver<()>,
   ) -> Result<(), anyhow::Error> {
     let mut consumer = channel
@@ -134,7 +147,7 @@ impl EventConsumer {
       match result {
         Ok(delivery) => {
           tokio::select! {
-              _ = EventConsumer::handle_delivery(delivery, &ord_db_client) => {},
+              _ = EventConsumer::handle_delivery(delivery, &ord_indexation) => {},
               _ = &mut shutdown_signal => {
                   log::info!("Shutdown signal received, stopping consumer.");
                   break;
@@ -157,12 +170,12 @@ impl EventConsumer {
 
   async fn handle_delivery(
     delivery: lapin::message::Delivery,
-    ord_db_client: &Arc<OrdDbClient>,
+    ord_indexation: &Arc<OrdIndexation>,
   ) -> Result<(), anyhow::Error> {
     let event: Result<Event, _> = serde_json::from_slice(&delivery.data);
     match event {
       Ok(event) => {
-        if let Err(err) = EventConsumer::process_event(event, ord_db_client).await {
+        if let Err(err) = EventConsumer::process_event(event, ord_indexation).await {
           log::error!("Failed to process event: {}", err);
           delivery
             .reject(BasicRejectOptions { requeue: false })
@@ -184,13 +197,13 @@ impl EventConsumer {
 
   async fn process_event(
     event: Event,
-    ord_db_client: &Arc<OrdDbClient>,
+    ord_indexation: &Arc<OrdIndexation>,
   ) -> Result<(), anyhow::Error> {
     match &event {
       Event::BlockCommitted {
         from_height,
         to_height,
-      } => ord_db_client.sync_blocks(from_height, to_height).await?,
+      } => ord_indexation.sync_blocks(from_height, to_height).await?,
       Event::InscriptionCreated {
         block_height,
         charms,
@@ -199,7 +212,7 @@ impl EventConsumer {
         parent_inscription_ids,
         sequence_number,
       } => {
-        ord_db_client
+        ord_indexation
           .save_inscription_created(block_height, inscription_id, location)
           .await?
       }
@@ -210,7 +223,7 @@ impl EventConsumer {
         old_location,
         sequence_number,
       } => {
-        ord_db_client
+        ord_indexation
           .save_inscription_transferred(block_height, inscription_id, new_location, old_location)
           .await?;
       }
