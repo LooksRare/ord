@@ -1,10 +1,14 @@
+use std::str::FromStr;
 use std::sync::Arc;
 
+use bitcoin::{OutPoint, Txid};
 use futures::TryStreamExt;
+use sqlx::types::Json;
 use sqlx::{PgPool, Row};
 
 use ordinals::SatPoint;
 
+use crate::api::InscriptionDetails;
 use crate::InscriptionId;
 
 #[derive(Debug, Clone)]
@@ -12,8 +16,8 @@ pub struct Event {
   pub type_id: i16,
   pub block_height: i64,
   pub inscription_id: String,
-  pub location: Option<String>,
-  pub old_location: Option<String>,
+  pub location: Option<SatPoint>,
+  pub old_location: Option<SatPoint>,
 }
 
 impl Event {
@@ -22,8 +26,14 @@ impl Event {
       type_id: row.get("type_id"),
       block_height: row.get("block_height"),
       inscription_id: row.get("inscription_id"),
-      location: row.get("location"),
-      old_location: row.get("old_location"),
+      location: {
+        let location_str: Option<String> = row.get("location");
+        location_str.and_then(|s| SatPoint::from_str(&s).ok())
+      },
+      old_location: {
+        let old_location_str: Option<String> = row.get("old_location");
+        old_location_str.and_then(|s| SatPoint::from_str(&s).ok())
+      },
     }
   }
 }
@@ -104,6 +114,129 @@ impl OrdDbClient {
       .bind(inscription_id.to_string())
       .bind(new_location.to_string())
       .bind(old_location.to_string())
+      .execute(&*self.pool)
+      .await?;
+    Ok(())
+  }
+
+  pub async fn save_inscription(
+    &self,
+    inscription_details: &InscriptionDetails,
+  ) -> Result<(), sqlx::Error> {
+    let query = "
+        INSERT INTO inscription (
+            genesis_id,
+            number,
+            content_type,
+            content_length,
+            metadata,
+            genesis_block_height,
+            genesis_block_time,
+            sat_number,
+            sat_rarity,
+            sat_block_height,
+            sat_block_time,
+            fee,
+            charms,
+            children,
+            parents
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        ON CONFLICT (genesis_id) DO UPDATE SET
+            number = EXCLUDED.number,
+            content_type = EXCLUDED.content_type,
+            content_length = COALESCE(EXCLUDED.content_length, inscription.content_length),
+            metadata = COALESCE(EXCLUDED.metadata, inscription.metadata),
+            genesis_block_height = EXCLUDED.genesis_block_height,
+            genesis_block_time = EXCLUDED.genesis_block_time,
+            sat_number = COALESCE(EXCLUDED.sat_number, inscription.sat_number),
+            sat_rarity = COALESCE(EXCLUDED.sat_rarity, inscription.sat_rarity),
+            sat_block_height = COALESCE(EXCLUDED.sat_block_height, inscription.sat_block_height),
+            sat_block_time = COALESCE(EXCLUDED.sat_block_time, inscription.sat_block_time),
+            fee = EXCLUDED.fee,
+            charms = EXCLUDED.charms,
+            children = COALESCE(EXCLUDED.children, inscription.children),
+            parents = COALESCE(EXCLUDED.parents, inscription.parents)
+    ";
+    sqlx::query(query)
+      .bind(inscription_details.id.to_string())
+      .bind(inscription_details.number)
+      .bind(inscription_details.content_type.as_deref())
+      .bind(inscription_details.content_length.map(|n| n as i32))
+      .bind(Json(&inscription_details.metadata)) //TODO need to ascii decode
+      .bind(inscription_details.genesis_block_height as i32)
+      .bind(inscription_details.genesis_block_time)
+      .bind(inscription_details.sat_number.map(|n| n as i64))
+      .bind(inscription_details.sat_rarity.map(|r| r.to_i16()))
+      .bind(inscription_details.sat_block_height.map(|n| n as i32))
+      .bind(inscription_details.sat_block_time)
+      .bind(inscription_details.fee as i64)
+      .bind(inscription_details.charms as i16)
+      .bind(Json(&inscription_details.children))
+      .bind(Json(&inscription_details.parents))
+      .execute(&*self.pool)
+      .await?;
+    Ok(())
+  }
+
+  pub async fn save_location(
+    &self,
+    id: InscriptionId,
+    block_height: i64,
+    block_time: i64,
+    tx_id: Option<Txid>,
+    to_address: Option<String>,
+    to_outpoint: Option<OutPoint>,
+    to_offset: Option<u64>,
+    from_address: Option<String>,
+    from_outpoint: Option<OutPoint>,
+    from_offset: Option<u64>,
+    value: Option<u64>,
+  ) -> Result<(), sqlx::Error> {
+    let query = "
+        INSERT INTO location (
+            inscription_id,
+            block_height,
+            block_time,
+            tx_id,
+            to_address,
+            cur_output,
+            cur_offset,
+            from_address,
+            prev_output,
+            prev_offset,
+            value
+        )
+        SELECT
+            (SELECT id FROM inscription WHERE genesis_id = $1),
+            $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+        WHERE NOT EXISTS (
+            SELECT 1 FROM location
+            WHERE
+                inscription_id = (SELECT id FROM inscription WHERE genesis_id = $1) AND
+                block_height = $2 AND
+                block_time = $3 AND
+                tx_id = $4 AND
+                to_address = $5 AND
+                cur_output = $6 AND
+                cur_offset = $7 AND
+                from_address = $8 AND
+                prev_output = $9 AND
+                prev_offset = $10 AND
+                value = $11
+        );
+    ";
+    sqlx::query(query)
+      .bind(id.to_string())
+      .bind(block_height)
+      .bind(block_time)
+      .bind(tx_id.map(|n| n.to_string()))
+      .bind(to_address)
+      .bind(to_outpoint.map(|n| n.to_string()))
+      .bind(to_offset.map(|n| n as i64))
+      .bind(from_address)
+      .bind(from_outpoint.map(|n| n.to_string()))
+      .bind(from_offset.map(|n| n as i64))
+      .bind(value.map(|n| n as i64))
       .execute(&*self.pool)
       .await?;
     Ok(())

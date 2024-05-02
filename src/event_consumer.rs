@@ -67,6 +67,7 @@ impl EventConsumer {
       let ord_api_client = Arc::new(ord_api_c);
 
       let ord_indexation = Arc::new(OrdIndexation::new(
+        settings,
         Arc::clone(&ord_db_client),
         Arc::clone(&ord_api_client),
       ));
