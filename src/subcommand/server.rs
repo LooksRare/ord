@@ -203,6 +203,7 @@ impl Server {
         .route("/feed.xml", get(Self::feed))
         .route("/input/:block/:transaction/:input", get(Self::input))
         .route("/inscription/:inscription_query", get(Self::inscription))
+        .route("/inscription/:inscription_query/details", get(Self::inscription_details))
         .route("/inscriptions", get(Self::inscriptions))
         .route("/inscriptions", post(Self::inscriptions_json))
         .route("/inscriptions/:page", get(Self::inscriptions_paginated))
@@ -1539,6 +1540,53 @@ impl Server {
         .ok_or_not_found(|| format!("inscription {query}"))?;
 
       Ok(if accept_json {
+        Json(info).into_response()
+      } else {
+        InscriptionHtml {
+          chain: server_config.chain,
+          charms: Charm::Vindicated.unset(info.charms.iter().fold(0, |mut acc, charm| {
+            charm.set(&mut acc);
+            acc
+          })),
+          children: info.children,
+          fee: info.fee,
+          height: info.height,
+          inscription,
+          id: info.id,
+          number: info.number,
+          next: info.next,
+          output: txout,
+          parents: info.parents,
+          previous: info.previous,
+          rune: info.rune,
+          sat: info.sat,
+          satpoint: info.satpoint,
+          timestamp: Utc.timestamp_opt(info.timestamp, 0).unwrap(),
+        }
+        .page(server_config)
+        .into_response()
+      })
+    })
+  }
+
+  async fn inscription_details(
+    Extension(server_config): Extension<Arc<ServerConfig>>,
+    Extension(index): Extension<Arc<Index>>,
+    Path(DeserializeFromStr(query)): Path<DeserializeFromStr<query::Inscription>>,
+    AcceptJson(accept_json): AcceptJson,
+  ) -> ServerResult {
+    task::block_in_place(|| {
+      if let query::Inscription::Sat(_) = query {
+        if !index.has_sat_index() {
+          return Err(ServerError::NotFound("sat index required".into()));
+        }
+      }
+
+      let (info, txout, inscription) = index
+        .inscription_info(query)?
+        .ok_or_not_found(|| format!("inscription {query}"))?;
+
+      Ok(if accept_json {
         let sat_block_time = info
           .sat
           .and_then(|sat| index.block_time(sat.height()).ok())
@@ -1547,19 +1595,19 @@ impl Server {
         let response = InscriptionDetails {
           id: info.id,
           number: info.number,
-          owner: info.address,
+          owner: info.address, //not used
           content_type: info.content_type,
           content_length: info.content_length,
           metadata: inscription.metadata,
           genesis_block_height: info.height,
           genesis_block_time: info.timestamp,
           sat_number: info.sat.map(|sat| sat.0),
-          sat_name: info.sat.map(|sat| sat.name()),
+          sat_name: info.sat.map(|sat| sat.name()), //not used
           sat_rarity: info.sat.map(|sat| sat.rarity()),
           sat_block_height: info.sat.map(|sat| sat.height().0),
           sat_block_time,
-          satpoint: info.satpoint,
-          value: info.value,
+          satpoint: info.satpoint, //not used
+          value: info.value,       //not used
           fee: info.fee,
           charms: Charm::Vindicated.unset(info.charms.iter().fold(0, |mut acc, charm| {
             charm.set(&mut acc);

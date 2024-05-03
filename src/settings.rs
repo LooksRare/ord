@@ -1036,6 +1036,7 @@ mod tests {
       ("NO_INDEX_INSCRIPTIONS", "1"),
       ("SERVER_PASSWORD", "server password"),
       ("SERVER_URL", "server url"),
+      ("SERVER_USERNAME", "server username"),
       ("RMQ_URL", "http://127.0.0.1"),
       ("RMQ_USERNAME", "rmq username"),
       ("RMQ_PASSWORD", "rmq password"),
