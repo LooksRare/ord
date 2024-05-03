@@ -745,10 +745,18 @@ impl<'index> Updater<'index> {
     Reorg::update_savepoints(self.index, self.height)?;
 
     if let Some(sender) = self.index.event_sender.as_ref() {
-      sender.blocking_send(Event::BlockCommitted {
-        from_height: self.height - uncommitted as u32,
-        to_height: self.height,
-      })?;
+      if let Ok(uncommitted) = u32::try_from(uncommitted) {
+        sender.blocking_send(Event::BlockCommitted {
+          from_height: self.height - uncommitted,
+          to_height: self.height,
+        })?;
+      } else {
+        log::error!(
+          "Failed to publish block range from_height: {}, uncommitted: {}",
+          self.height,
+          uncommitted
+        );
+      }
     }
 
     Ok(())

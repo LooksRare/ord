@@ -54,11 +54,11 @@ impl OrdDbClient {
     let query = "
         SELECT type_id, block_height, inscription_id, location, old_location
         FROM event
-        WHERE block_height = $1
+        WHERE block_height = $1::BIGINT
         ORDER BY type_id ASC, id ASC";
 
     let mut rows = sqlx::query(query)
-      .bind(block_height as i64)
+      .bind(block_height.to_string())
       .fetch(&*self.pool);
 
     let mut events = Vec::new();
@@ -79,14 +79,14 @@ impl OrdDbClient {
   ) -> Result<(), sqlx::Error> {
     let query = "
         INSERT INTO event (type_id, block_height, inscription_id, location)
-        SELECT $1, $2, $3, $4
+        SELECT $1, $2::BIGINT, $3, $4
         WHERE NOT EXISTS (
             SELECT 1 FROM event
-            WHERE type_id = $1 AND block_height = $2 AND inscription_id = $3 AND location = $4
+            WHERE type_id = $1 AND block_height = $2::BIGINT AND inscription_id = $3 AND location = $4
         )";
     sqlx::query(query)
       .bind(1_i32) // Type ID for InscriptionCreated
-      .bind(*block_height as i64)
+      .bind(block_height.to_string())
       .bind(inscription_id.to_string())
       .bind(location.map(|loc| loc.to_string()))
       .execute(&*self.pool)
@@ -103,14 +103,14 @@ impl OrdDbClient {
   ) -> Result<(), sqlx::Error> {
     let query = "
         INSERT INTO event (type_id, block_height, inscription_id, location, old_location)
-        SELECT $1, $2, $3, $4, $5
+        SELECT $1, $2::BIGINT, $3, $4, $5
         WHERE NOT EXISTS (
             SELECT 1 FROM event
-            WHERE type_id = $1 AND block_height = $2 AND inscription_id = $3 AND location = $4 AND old_location = $5
+            WHERE type_id = $1 AND block_height = $2::BIGINT AND inscription_id = $3 AND location = $4 AND old_location = $5
         )";
     sqlx::query(query)
       .bind(2_i32) // Type ID for InscriptionTransferred
-      .bind(*block_height as i64)
+      .bind(block_height.to_string())
       .bind(inscription_id.to_string())
       .bind(new_location.to_string())
       .bind(old_location.to_string())
@@ -157,7 +157,7 @@ impl OrdDbClient {
             charms,
             children,
             parents
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        ) VALUES ($1, $2, $3, $4::INTEGER, $5, $6::INTEGER, $7::BIGINT, $8::BIGINT, $9, $10::INTEGER, $11::BIGINT, $12::BIGINT, $13::SMALLINT, $14, $15)
         ON CONFLICT (genesis_id) DO UPDATE SET
             number = EXCLUDED.number,
             content_type = EXCLUDED.content_type,
@@ -179,16 +179,16 @@ impl OrdDbClient {
       .bind(inscription_details.id.to_string())
       .bind(inscription_details.number)
       .bind(inscription_details.content_type.as_deref())
-      .bind(inscription_details.content_length.map(|n| n as i32))
+      .bind(inscription_details.content_length.map(|n| n.to_string()))
       .bind(metadata)
-      .bind(inscription_details.genesis_block_height as i32)
+      .bind(inscription_details.genesis_block_height.to_string())
       .bind(inscription_details.genesis_block_time)
-      .bind(inscription_details.sat_number.map(|n| n as i64))
+      .bind(inscription_details.sat_number.map(|n| n.to_string()))
       .bind(inscription_details.sat_rarity.map(|r| r.to_i16()))
-      .bind(inscription_details.sat_block_height.map(|n| n as i32))
+      .bind(inscription_details.sat_block_height.map(|n| n.to_string()))
       .bind(inscription_details.sat_block_time)
-      .bind(inscription_details.fee as i64)
-      .bind(inscription_details.charms as i16)
+      .bind(inscription_details.fee.to_string())
+      .bind(inscription_details.charms.to_string())
       .bind(Json(&inscription_details.children))
       .bind(Json(&inscription_details.parents))
       .fetch_one(&*self.pool)
@@ -225,35 +225,35 @@ impl OrdDbClient {
             value
         )
         SELECT
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+            $1, $2, $3::BIGINT, $4, $5, $6, $7::BIGINT, $8, $9, $10::BIGINT, $11::BIGINT
         WHERE NOT EXISTS (
             SELECT 1 FROM location
             WHERE
                 inscription_id = $1 AND
                 block_height = $2 AND
-                block_time = $3 AND
+                block_time = $3::BIGINT AND
                 tx_id = $4 AND
                 to_address = $5 AND
                 cur_output = $6 AND
-                cur_offset = $7 AND
+                cur_offset = $7::BIGINT AND
                 from_address = $8 AND
                 prev_output = $9 AND
-                prev_offset = $10 AND
-                value = $11
+                prev_offset = $10::BIGINT AND
+                value = $10::BIGINT
         );
     ";
     sqlx::query(query)
       .bind(id)
       .bind(block_height)
-      .bind(block_time as i64)
+      .bind(block_time.to_string())
       .bind(tx_id.map(|n| n.to_string()))
       .bind(to_address)
       .bind(to_outpoint.map(|n| n.to_string()))
-      .bind(to_offset.map(|n| n as i64))
+      .bind(to_offset.map(|n| n.to_string()))
       .bind(from_address)
       .bind(from_outpoint.map(|n| n.to_string()))
-      .bind(from_offset.map(|n| n as i64))
-      .bind(value.map(|n| n as i64))
+      .bind(from_offset.map(|n| n.to_string()))
+      .bind(value.map(|n| n.to_string()))
       .execute(&*self.pool)
       .await?;
     Ok(())

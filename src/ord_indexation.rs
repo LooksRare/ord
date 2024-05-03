@@ -101,11 +101,11 @@ impl OrdIndexation {
         inscription_id,
         event.block_height,
         block_info.timestamp,
-        event.location.as_ref().map(|loc| loc.outpoint.txid.clone()),
+        event.location.as_ref().map(|loc| loc.outpoint.txid),
         to_location_details
           .as_ref()
           .map(|details| details.0.clone()),
-        event.location.as_ref().map(|loc| loc.outpoint.clone()),
+        event.location.as_ref().map(|loc| loc.outpoint),
         event.location.as_ref().map(|loc| loc.offset),
         None,
         None,
@@ -164,16 +164,16 @@ impl OrdIndexation {
         inscription_id,
         event.block_height,
         block_info.timestamp,
-        event.location.as_ref().map(|loc| loc.outpoint.txid.clone()),
+        event.location.as_ref().map(|loc| loc.outpoint.txid),
         to_location_details
           .as_ref()
           .map(|details| details.0.clone()),
-        event.location.as_ref().map(|loc| loc.outpoint.clone()),
+        event.location.as_ref().map(|loc| loc.outpoint),
         event.location.as_ref().map(|loc| loc.offset),
         from_location_details
           .as_ref()
           .map(|details| details.0.clone()),
-        event.old_location.as_ref().map(|loc| loc.outpoint.clone()),
+        event.old_location.as_ref().map(|loc| loc.outpoint),
         event.old_location.as_ref().map(|loc| loc.offset),
         to_location_details.as_ref().map(|details| details.1),
       )
@@ -186,10 +186,7 @@ impl OrdIndexation {
     &self,
     location: &SatPoint,
   ) -> Result<Option<(String, u64)>, anyhow::Error> {
-    let tx_details = self
-      .ord_api_client
-      .fetch_tx(location.outpoint.txid.clone())
-      .await?;
+    let tx_details = self.ord_api_client.fetch_tx(location.outpoint.txid).await?;
 
     let output = tx_details
       .transaction
