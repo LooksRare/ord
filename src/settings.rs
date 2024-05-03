@@ -587,7 +587,7 @@ impl Settings {
     let pass = self.rabbitmq_password.as_ref()?;
     let url = self.rabbitmq_url.as_ref()?;
 
-    Some(format!("amqp://{}:{}@{}", user, pass, url))
+    Some(format!("amqps://{}:{}@{}", user, pass, url))
   }
 }
 
