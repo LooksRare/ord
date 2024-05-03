@@ -124,9 +124,8 @@ impl OrdIndexation {
       match result {
         Ok(value) => {
           match &value {
-            Value::Object(_) | Value::Array(_) => {
-              serde_json::to_string(&value).ok()
-            },
+            Value::Object(obj) if obj.is_empty() => None,
+            Value::Object(_) | Value::Array(_) => serde_json::to_string(&value).ok(),
             _ => {
               Some(hex::encode(bytes))
             }
