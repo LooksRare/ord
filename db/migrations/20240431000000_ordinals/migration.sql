@@ -1,4 +1,4 @@
-CREATE TABLE events
+CREATE TABLE event
 (
   id             SERIAL PRIMARY KEY,
   type_id        SMALLINT NOT NULL, --1,InscriptionCreated;2,InscriptionTransferred
@@ -9,8 +9,8 @@ CREATE TABLE events
   created_at     TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_events_block_height ON events (block_height);
-CREATE INDEX idx_events_inscription_id ON events (inscription_id);
+CREATE INDEX idx_events_block_height ON event (block_height);
+CREATE INDEX idx_events_inscription_id ON event (inscription_id);
 
 CREATE TABLE inscription
 (

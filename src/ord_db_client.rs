@@ -53,7 +53,7 @@ impl OrdDbClient {
   ) -> Result<Vec<Event>, sqlx::Error> {
     let query = "
         SELECT type_id, block_height, inscription_id, location, old_location
-        FROM events
+        FROM event
         WHERE block_height = $1
         ORDER BY type_id ASC, id ASC";
 
@@ -78,10 +78,10 @@ impl OrdDbClient {
     location: &Option<SatPoint>,
   ) -> Result<(), sqlx::Error> {
     let query = "
-        INSERT INTO events (type_id, block_height, inscription_id, location)
+        INSERT INTO event (type_id, block_height, inscription_id, location)
         SELECT $1, $2, $3, $4
         WHERE NOT EXISTS (
-            SELECT 1 FROM events
+            SELECT 1 FROM event
             WHERE type_id = $1 AND block_height = $2 AND inscription_id = $3 AND location = $4
         )";
     sqlx::query(query)
@@ -102,10 +102,10 @@ impl OrdDbClient {
     old_location: &SatPoint,
   ) -> Result<(), sqlx::Error> {
     let query = "
-        INSERT INTO events (type_id, block_height, inscription_id, location, old_location)
+        INSERT INTO event (type_id, block_height, inscription_id, location, old_location)
         SELECT $1, $2, $3, $4, $5
         WHERE NOT EXISTS (
-            SELECT 1 FROM events
+            SELECT 1 FROM event
             WHERE type_id = $1 AND block_height = $2 AND inscription_id = $3 AND location = $4 AND old_location = $5
         )";
     sqlx::query(query)
