@@ -1,5 +1,7 @@
 use anyhow::{Context, Result};
 use lapin::options::ConfirmSelectOptions;
+use lapin::tcp::{AMQPUriTcpExt, NativeTlsConnector};
+use lapin::uri::AMQPUri;
 use lapin::{options::BasicPublishOptions, BasicProperties, Connection, ConnectionProperties};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
@@ -27,7 +29,20 @@ impl EventPublisher {
 
     std::thread::spawn(move || {
       Runtime::new().expect("runtime is setup").block_on(async {
-        let conn = Connection::connect(&addr, ConnectionProperties::default())
+        let uri = addr.parse::<AMQPUri>().unwrap();
+
+        let connect = move |uri: &AMQPUri| {
+          uri.connect().and_then(|stream| {
+            let mut tls_builder = NativeTlsConnector::builder();
+            tls_builder.danger_accept_invalid_certs(true);
+            stream.into_native_tls(
+              &tls_builder.build().expect("TLS configuration failed"),
+              &uri.authority.host,
+            )
+          })
+        };
+
+        let conn = Connection::connector(uri, Box::new(connect), ConnectionProperties::default())
           .await
           .expect("connects to rabbitmq ok");
 

@@ -7,10 +7,10 @@ use serde_json::Value;
 use ordinals::SatPoint;
 
 use crate::api::BlockInfo;
-use crate::InscriptionId;
 use crate::ord_api_client::OrdApiClient;
 use crate::ord_db_client::{Event, OrdDbClient};
 use crate::settings::Settings;
+use crate::InscriptionId;
 
 pub struct OrdIndexation {
   settings: Settings,
@@ -122,18 +122,12 @@ impl OrdIndexation {
       let cursor = Cursor::new(bytes);
       let result = from_reader(cursor);
       match result {
-        Ok(value) => {
-          match &value {
-            Value::Object(obj) if obj.is_empty() => None,
-            Value::Object(_) | Value::Array(_) => serde_json::to_string(&value).ok(),
-            _ => {
-              Some(hex::encode(bytes))
-            }
-          }
+        Ok(value) => match &value {
+          Value::Object(obj) if obj.is_empty() => None,
+          Value::Object(_) | Value::Array(_) => serde_json::to_string(&value).ok(),
+          _ => Some(hex::encode(bytes)),
         },
-        Err(_) => {
-          Some(hex::encode(bytes))
-        }
+        Err(_) => Some(hex::encode(bytes)),
       }
     })
   }

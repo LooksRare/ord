@@ -4,12 +4,18 @@ use anyhow::Context;
 use bitcoin::secp256k1::rand::distributions::Alphanumeric;
 use chrono::Utc;
 use clap::Parser;
-use futures::StreamExt;
-use lapin::{options::*, types::FieldTable, Connection, ConnectionProperties};
+use lapin::options::{
+  BasicAckOptions, BasicConsumeOptions, BasicRejectOptions, ConfirmSelectOptions,
+};
+use lapin::tcp::{AMQPUriTcpExt, NativeTlsConnector};
+use lapin::types::FieldTable;
+use lapin::uri::AMQPUri;
+use lapin::{Connection, ConnectionProperties};
 use rand::distributions::DistString;
 use sqlx::postgres::PgPoolOptions;
 use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
+use tokio_stream::StreamExt;
 
 use crate::index::event::Event;
 use crate::ord_api_client::OrdApiClient;
@@ -37,7 +43,20 @@ impl EventConsumer {
         .rabbitmq_addr()
         .context("rabbitmq amqp credentials and url must be defined")?;
 
-      let conn = Connection::connect(&addr, ConnectionProperties::default())
+      let uri = addr.parse::<AMQPUri>().unwrap();
+
+      let connect = move |uri: &AMQPUri| {
+        uri.connect().and_then(|stream| {
+          let mut tls_builder = NativeTlsConnector::builder();
+          tls_builder.danger_accept_invalid_certs(true);
+          stream.into_native_tls(
+            &tls_builder.build().expect("TLS configuration failed"),
+            &uri.authority.host,
+          )
+        })
+      };
+
+      let conn = Connection::connector(uri, Box::new(connect), ConnectionProperties::default())
         .await
         .expect("connects to rabbitmq ok");
 
