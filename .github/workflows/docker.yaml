@@ -10,7 +10,7 @@ on:
 
 jobs:
   ordinals-indexer:
-    timeout-minutes: 10
+    timeout-minutes: 60
     runs-on: [self-hosted]
     steps:
       -
