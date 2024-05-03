@@ -6316,7 +6316,6 @@ mod tests {
       txid: create_txid,
       index: 0,
     };
-    let create_event = event_receiver.blocking_recv().unwrap();
     let expected_charms = if context.index.index_sats { 513 } else { 0 };
 
     let expected_event = Event::InscriptionCreated {
@@ -6324,9 +6323,9 @@ mod tests {
       location: Some(SatPoint {
         outpoint: OutPoint {
           txid: create_txid,
-          vout: 0
+          vout: 0,
         },
-        offset: 0
+        offset: 0,
       }),
       sequence_number: 0,
       block_height: 2,
@@ -6351,23 +6350,22 @@ mod tests {
 
     context.mine_blocks(1);
 
-    let transfer_event = event_receiver.blocking_recv().unwrap();
     let expected_event = Event::InscriptionTransferred {
       block_height: 3,
       inscription_id,
       new_location: SatPoint {
         outpoint: OutPoint {
           txid: transfer_txid,
-          vout: 0
+          vout: 0,
         },
-        offset: 0
+        offset: 0,
       },
       old_location: SatPoint {
         outpoint: OutPoint {
           txid: create_txid,
-          vout: 0
+          vout: 0,
         },
-        offset: 0
+        offset: 0,
       },
       sequence_number: 0,
     };

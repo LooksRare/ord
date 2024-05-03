@@ -203,7 +203,10 @@ impl Server {
         .route("/feed.xml", get(Self::feed))
         .route("/input/:block/:transaction/:input", get(Self::input))
         .route("/inscription/:inscription_query", get(Self::inscription))
-        .route("/inscription/:inscription_query/details", get(Self::inscription_details))
+        .route(
+          "/inscription/:inscription_query/details",
+          get(Self::inscription_details),
+        )
         .route("/inscriptions", get(Self::inscriptions))
         .route("/inscriptions", post(Self::inscriptions_json))
         .route("/inscriptions/:page", get(Self::inscriptions_paginated))
