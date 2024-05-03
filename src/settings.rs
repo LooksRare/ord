@@ -444,7 +444,7 @@ impl Settings {
             "regtest" => Chain::Regtest,
             "signet" => Chain::Signet,
             other => bail!("Bitcoin RPC server on unknown chain: {other}"),
-          }
+          };
         }
         Err(bitcoincore_rpc::Error::JsonRpc(bitcoincore_rpc::jsonrpc::Error::Rpc(err)))
           if err.code == -28 => {}
@@ -1041,9 +1041,9 @@ mod tests {
       ("RMQ_PASSWORD", "rmq password"),
       ("RMQ_EXCHANGE", "rmq exchange"),
     ]
-    .into_iter()
-    .map(|(key, value)| (key.into(), value.into()))
-    .collect::<BTreeMap<String, String>>();
+      .into_iter()
+      .map(|(key, value)| (key.into(), value.into()))
+      .collect::<BTreeMap<String, String>>();
 
     pretty_assert_eq!(
       Settings::from_env(env).unwrap(),

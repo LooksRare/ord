@@ -1,4 +1,6 @@
 use crate::event_publisher::EventPublisher;
+use crate::ord_api_client::OrdApiClient;
+use crate::ord_db_client::OrdDbClient;
 
 use super::*;
 
@@ -43,6 +45,8 @@ pub(crate) enum Subcommand {
   Server(server::Server),
   #[command(about = "Run the explorer server in event emit mode")]
   EventServer(server::Server),
+  #[command(about = "Run the index event consumer")]
+  EventConsumer(event_consumer::EventConsumer),
   #[command(about = "Display settings")]
   Settings,
   #[command(about = "Display information about a block's subsidy")]
@@ -86,6 +90,7 @@ impl Subcommand {
         LISTENERS.lock().unwrap().push(handle.clone());
         server.run(settings, index, handle)
       }
+      Self::EventConsumer(event_consumer) => event_consumer.run(&settings),
       Self::Settings => settings::run(settings),
       Self::Subsidy(subsidy) => subsidy.run(),
       Self::Supply => supply::run(),

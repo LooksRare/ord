@@ -1,7 +1,14 @@
 {
   "queues": [
     {
-      "name": "ord-q",
+      "name": "btc-inscription-q",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "btc-blocks-q",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
@@ -23,9 +30,25 @@
     {
       "source": "ord-tx",
       "vhost": "/",
-      "destination": "ord-q",
+      "destination": "btc-blocks-q",
       "destination_type": "queue",
-      "routing_key": "",
+      "routing_key": "BlockCommitted",
+      "arguments": {}
+    },
+    {
+      "source": "ord-tx",
+      "vhost": "/",
+      "destination": "btc-inscription-q",
+      "destination_type": "queue",
+      "routing_key": "InscriptionCreated",
+      "arguments": {}
+    },
+    {
+      "source": "ord-tx",
+      "vhost": "/",
+      "destination": "btc-inscription-q",
+      "destination_type": "queue",
+      "routing_key": "InscriptionTransferred",
       "arguments": {}
     }
   ]

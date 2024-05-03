@@ -41,4 +41,8 @@ pub enum Event {
     rune_id: RuneId,
     txid: Txid,
   },
+  BlockCommitted {
+    from_height: u32,
+    to_height: u32,
+  },
 }

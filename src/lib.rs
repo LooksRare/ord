@@ -104,6 +104,7 @@ mod blocktime;
 pub mod chain;
 pub mod decimal;
 mod deserialize_from_str;
+mod event_consumer;
 mod event_publisher;
 mod fee_rate;
 pub mod index;
@@ -112,6 +113,10 @@ mod into_usize;
 mod macros;
 mod object;
 pub mod options;
+pub mod ord_api_client;
+
+pub mod ord_db_client;
+mod ord_indexation;
 pub mod outgoing;
 mod re;
 mod representation;

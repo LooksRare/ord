@@ -41,12 +41,15 @@ impl EventPublisher {
           .expect("enable msg confirms");
 
         while let Some(event) = rx.recv().await {
+          // TODO we might want to panic if rmq is down so we don't miss any messages
+          //  if we miss messages only way to replay them is run `ord` instance from scratch
+          //  maybe we can trigger fake reorg to force it to reindex from savepoint?
           let message = serde_json::to_vec(&event).expect("failed to serialize event");
 
           let publish = channel
             .basic_publish(
               &exchange,
-              "",
+              EventPublisher::type_name(&event),
               BasicPublishOptions::default(),
               &message,
               BasicProperties::default(),
@@ -62,5 +65,17 @@ impl EventPublisher {
     });
 
     Ok(EventPublisher { sender: tx })
+  }
+
+  fn type_name(event: &Event) -> &'static str {
+    match event {
+      Event::InscriptionCreated { .. } => "InscriptionCreated",
+      Event::InscriptionTransferred { .. } => "InscriptionTransferred",
+      Event::RuneBurned { .. } => "RuneBurned",
+      Event::RuneEtched { .. } => "RuneEtched",
+      Event::RuneMinted { .. } => "RuneMinted",
+      Event::RuneTransferred { .. } => "RuneTransferred",
+      Event::BlockCommitted { .. } => "BlockCommitted",
+    }
   }
 }
