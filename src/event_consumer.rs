@@ -207,11 +207,11 @@ impl EventConsumer {
       } => ord_indexation.sync_blocks(from_height, to_height).await?,
       Event::InscriptionCreated {
         block_height,
-        charms,
+        charms: _charms,
         inscription_id,
         location,
-        parent_inscription_ids,
-        sequence_number,
+        parent_inscription_ids: _parent_inscription_ids,
+        sequence_number: _sequence_number,
       } => {
         ord_indexation
           .save_inscription_created(block_height, inscription_id, location)
@@ -222,7 +222,7 @@ impl EventConsumer {
         inscription_id,
         new_location,
         old_location,
-        sequence_number,
+        sequence_number: _sequence_number,
       } => {
         ord_indexation
           .save_inscription_transferred(block_height, inscription_id, new_location, old_location)

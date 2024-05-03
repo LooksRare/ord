@@ -37,7 +37,7 @@ impl OrdApiClient {
     let mut delay = Duration::from_secs(1);
 
     while attempts < max_attempts {
-      let mut request = request_builder
+      let request = request_builder
         .try_clone()
         .ok_or_else(|| anyhow!("Failed to clone request"))?;
 
@@ -63,7 +63,7 @@ impl OrdApiClient {
           }
           Err(e) => return Err(anyhow!(e)),
         },
-        Err(e) => {
+        Err(_e) => {
           attempts += 1;
           sleep(delay).await;
           delay *= 2;

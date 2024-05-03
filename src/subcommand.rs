@@ -1,6 +1,4 @@
 use crate::event_publisher::EventPublisher;
-use crate::ord_api_client::OrdApiClient;
-use crate::ord_db_client::OrdDbClient;
 
 use super::*;
 
