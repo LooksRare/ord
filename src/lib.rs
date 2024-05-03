@@ -116,6 +116,7 @@ pub mod options;
 pub mod ord_api_client;
 
 pub mod ord_db_client;
+mod ord_indexation;
 pub mod outgoing;
 mod re;
 mod representation;

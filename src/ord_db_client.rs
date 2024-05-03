@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use bitcoin::{OutPoint, Txid};
 use futures::TryStreamExt;
-use sqlx::types::Json;
 use sqlx::{PgPool, Row};
+use sqlx::types::Json;
 
 use ordinals::SatPoint;
 
@@ -119,10 +119,27 @@ impl OrdDbClient {
     Ok(())
   }
 
+  pub async fn fetch_inscription_id_by_genesis_id(
+    &self,
+    genesis_id: String,
+  ) -> Result<Option<i32>, sqlx::Error> {
+    let query = "
+            SELECT id FROM inscription
+            WHERE genesis_id = $1;
+        ";
+    let result = sqlx::query(query)
+      .bind(genesis_id)
+      .fetch_optional(&*self.pool)
+      .await?
+      .map(|row| row.get(0));
+    Ok(result)
+  }
+
   pub async fn save_inscription(
     &self,
     inscription_details: &InscriptionDetails,
-  ) -> Result<(), sqlx::Error> {
+    metadata: Option<String>,
+  ) -> Result<i32, sqlx::Error> {
     let query = "
         INSERT INTO inscription (
             genesis_id,
@@ -156,13 +173,14 @@ impl OrdDbClient {
             charms = EXCLUDED.charms,
             children = COALESCE(EXCLUDED.children, inscription.children),
             parents = COALESCE(EXCLUDED.parents, inscription.parents)
+        RETURNING id;
     ";
-    sqlx::query(query)
+    let id = sqlx::query_as::<_, (i32, )>(query)
       .bind(inscription_details.id.to_string())
       .bind(inscription_details.number)
       .bind(inscription_details.content_type.as_deref())
       .bind(inscription_details.content_length.map(|n| n as i32))
-      .bind(Json(&inscription_details.metadata)) //TODO need to ascii decode
+      .bind(metadata)
       .bind(inscription_details.genesis_block_height as i32)
       .bind(inscription_details.genesis_block_time)
       .bind(inscription_details.sat_number.map(|n| n as i64))
@@ -173,16 +191,16 @@ impl OrdDbClient {
       .bind(inscription_details.charms as i16)
       .bind(Json(&inscription_details.children))
       .bind(Json(&inscription_details.parents))
-      .execute(&*self.pool)
+      .fetch_one(&*self.pool)
       .await?;
-    Ok(())
+    Ok(id.0)
   }
 
   pub async fn save_location(
     &self,
-    id: InscriptionId,
+    id: i32,
     block_height: i64,
-    block_time: i64,
+    block_time: u64,
     tx_id: Option<Txid>,
     to_address: Option<String>,
     to_outpoint: Option<OutPoint>,
@@ -207,12 +225,11 @@ impl OrdDbClient {
             value
         )
         SELECT
-            (SELECT id FROM inscription WHERE genesis_id = $1),
-            $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
         WHERE NOT EXISTS (
             SELECT 1 FROM location
             WHERE
-                inscription_id = (SELECT id FROM inscription WHERE genesis_id = $1) AND
+                inscription_id = $1 AND
                 block_height = $2 AND
                 block_time = $3 AND
                 tx_id = $4 AND
@@ -226,9 +243,9 @@ impl OrdDbClient {
         );
     ";
     sqlx::query(query)
-      .bind(id.to_string())
+      .bind(id)
       .bind(block_height)
-      .bind(block_time)
+      .bind(block_time as i64)
       .bind(tx_id.map(|n| n.to_string()))
       .bind(to_address)
       .bind(to_outpoint.map(|n| n.to_string()))

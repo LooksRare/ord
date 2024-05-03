@@ -1,11 +1,16 @@
+use std::io::Cursor;
 use std::sync::Arc;
+
+use ciborium::from_reader;
+use serde_json::Value;
 
 use ordinals::SatPoint;
 
+use crate::api::BlockInfo;
+use crate::InscriptionId;
 use crate::ord_api_client::OrdApiClient;
 use crate::ord_db_client::{Event, OrdDbClient};
 use crate::settings::Settings;
-use crate::InscriptionId;
 
 pub struct OrdIndexation {
   settings: Settings,
@@ -34,10 +39,11 @@ impl OrdIndexation {
         .ord_db_client
         .fetch_events_by_block_height(block_height)
         .await?;
+      let block_info = self.ord_api_client.fetch_block_info(block_height).await?;
       for event in events {
         match event.type_id {
           1 => {
-            if let Err(e) = self.process_inscription_created(&event).await {
+            if let Err(e) = self.process_inscription_created(&event, &block_info).await {
               log::error!(
                 "Error processing inscription creation for event {:?}: {}",
                 event,
@@ -46,7 +52,16 @@ impl OrdIndexation {
             }
           }
           2 => {
-            // TODO: Handle type 2 events
+            if let Err(e) = self
+              .process_inscription_transferred(&event, &block_info)
+              .await
+            {
+              log::error!(
+                "Error processing inscription transferred for event {:?}: {}",
+                event,
+                e
+              );
+            }
           }
           _ => {
             log::warn!("Unhandled event type: {}", event.type_id);
@@ -58,17 +73,87 @@ impl OrdIndexation {
     Ok(())
   }
 
-  async fn process_inscription_created(&self, event: &Event) -> Result<(), anyhow::Error> {
+  async fn process_inscription_created(
+    &self,
+    event: &Event,
+    block_info: &BlockInfo,
+  ) -> Result<(), anyhow::Error> {
     let inscription_details = self
       .ord_api_client
       .fetch_inscription_details(event.inscription_id.clone())
       .await?;
-    self
+
+    let metadata = self.try_and_extract_metadata(&inscription_details.metadata);
+
+    let inscription_id = self
       .ord_db_client
-      .save_inscription(&inscription_details)
+      .save_inscription(&inscription_details, metadata)
       .await?;
 
-    let block_time = 0; //TODO need to fetch
+    let mut to_location_details: Option<(String, u64)> = None;
+    if let Some(location) = &event.location {
+      to_location_details = self.process_location(location).await?;
+    }
+
+    self
+      .ord_db_client
+      .save_location(
+        inscription_id,
+        event.block_height,
+        block_info.timestamp,
+        event.location.as_ref().map(|loc| loc.outpoint.txid.clone()),
+        to_location_details
+          .as_ref()
+          .map(|details| details.0.clone()),
+        event.location.as_ref().map(|loc| loc.outpoint.clone()),
+        event.location.as_ref().map(|loc| loc.offset),
+        None,
+        None,
+        None,
+        to_location_details.as_ref().map(|details| details.1),
+      )
+      .await?;
+
+    Ok(())
+  }
+
+  fn try_and_extract_metadata(&self, metadata: &Option<Vec<u8>>) -> Option<String> {
+    metadata.as_ref().and_then(|bytes| {
+      let cursor = Cursor::new(bytes);
+      let result = from_reader(cursor);
+      match result {
+        Ok(value) => {
+          match &value {
+            Value::Object(_) | Value::Array(_) => {
+              serde_json::to_string(&value).ok()
+            },
+            _ => {
+              Some(hex::encode(bytes))
+            }
+          }
+        },
+        Err(_) => {
+          Some(hex::encode(bytes))
+        }
+      }
+    })
+  }
+
+  async fn process_inscription_transferred(
+    &self,
+    event: &Event,
+    block_info: &BlockInfo,
+  ) -> Result<(), anyhow::Error> {
+    let inscription_id = self
+      .ord_db_client
+      .fetch_inscription_id_by_genesis_id(event.inscription_id.clone())
+      .await?
+      .ok_or_else(|| {
+        anyhow::anyhow!(
+          "No inscription found for genesis_id: {}",
+          event.inscription_id
+        )
+      })?;
 
     let mut to_location_details: Option<(String, u64)> = None;
     if let Some(location) = &event.location {
@@ -83,9 +168,9 @@ impl OrdIndexation {
     self
       .ord_db_client
       .save_location(
-        inscription_details.id.clone(),
+        inscription_id,
         event.block_height,
-        block_time,
+        block_info.timestamp,
         event.location.as_ref().map(|loc| loc.outpoint.txid.clone()),
         to_location_details
           .as_ref()

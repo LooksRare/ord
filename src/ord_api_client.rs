@@ -6,7 +6,7 @@ use http::StatusCode;
 use reqwest::{Client, RequestBuilder};
 use tokio::time::sleep;
 
-use crate::api::{InscriptionDetails, Transaction};
+use crate::api::{BlockInfo, InscriptionDetails, Transaction};
 
 pub struct OrdApiClient {
   ord_api_url: String,
@@ -93,6 +93,15 @@ impl OrdApiClient {
     let request_builder = self
       .client
       .get(format!("{}/tx/{}", self.ord_api_url, tx_id))
+      .header("Accept", "application/json");
+
+    self.execute_with_retries(request_builder, 3).await
+  }
+
+  pub async fn fetch_block_info(&self, block_height: u32) -> Result<BlockInfo, anyhow::Error> {
+    let request_builder = self
+      .client
+      .get(format!("{}/r/blockinfo/{}", self.ord_api_url, block_height))
       .header("Accept", "application/json");
 
     self.execute_with_retries(request_builder, 3).await
