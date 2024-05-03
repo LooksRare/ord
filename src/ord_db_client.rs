@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use bitcoin::{OutPoint, Txid};
 use futures::TryStreamExt;
-use sqlx::{PgPool, Row};
 use sqlx::types::Json;
+use sqlx::{PgPool, Row};
 
 use ordinals::SatPoint;
 
@@ -175,7 +175,7 @@ impl OrdDbClient {
             parents = COALESCE(EXCLUDED.parents, inscription.parents)
         RETURNING id;
     ";
-    let id = sqlx::query_as::<_, (i32, )>(query)
+    let id = sqlx::query_as::<_, (i32,)>(query)
       .bind(inscription_details.id.to_string())
       .bind(inscription_details.number)
       .bind(inscription_details.content_type.as_deref())
