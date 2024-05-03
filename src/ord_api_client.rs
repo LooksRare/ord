@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use bitcoin::Txid;
-use http::StatusCode;
 use reqwest::{Client, RequestBuilder};
 use tokio::time::sleep;
 
@@ -52,10 +51,10 @@ impl OrdApiClient {
               .map_err(anyhow::Error::from);
           }
           Err(e)
-            if e.status() == Some(StatusCode::TOO_MANY_REQUESTS)
-              || e
-                .status()
-                .map_or_else(|| false, |status_code| status_code.is_server_error()) =>
+            if e.status().map_or_else(
+              || false,
+              |status_code| status_code.is_server_error() || status_code.is_client_error(),
+            ) =>
           {
             attempts += 1;
             sleep(delay).await;
