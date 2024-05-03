@@ -81,7 +81,7 @@ impl OrdApiClient {
     let request_builder = self
       .client
       .get(format!(
-        "{}/inscription/{}",
+        "{}/inscription/{}/details",
         self.ord_api_url, inscription_id
       ))
       .header("Accept", "application/json");
