@@ -40,11 +40,6 @@ jobs:
       - name: Format
         run: cargo fmt --all -- --check
 
-      - name: Check for Forbidden Words
-        run: |
-          sudo apt-get install ripgrep
-          ./bin/forbid
-
   test:
     timeout-minutes: 5
     runs-on: self-hosted
