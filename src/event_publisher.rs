@@ -15,7 +15,8 @@ impl EventPublisher {
   pub fn run(settings: &Settings) -> Result<Self, anyhow::Error> {
     let addr = settings
       .rabbitmq_addr()
-      .context("rabbitmq amqp credentials and url must be defined")?;
+      .context("rabbitmq amqp credentials and url must be defined")?
+      .to_owned();
 
     let exchange = settings
       .rabbitmq_exchange()
