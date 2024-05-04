@@ -5,7 +5,9 @@ use bitcoin::secp256k1::rand::distributions::Alphanumeric;
 use chrono::Utc;
 use clap::Parser;
 use futures::StreamExt;
-use lapin::{options::*, types::FieldTable, Connection, ConnectionProperties};
+use lapin::{Connection, ConnectionProperties, options::*, types::FieldTable};
+use lapin::tcp::{AMQPUriTcpExt, RustlsConnector};
+use lapin::uri::AMQPUri;
 use rand::distributions::DistString;
 use sqlx::postgres::PgPoolOptions;
 use tokio::runtime::Runtime;
@@ -37,7 +39,17 @@ impl EventConsumer {
         .rabbitmq_addr()
         .context("rabbitmq amqp credentials and url must be defined")?;
 
-      let conn = Connection::connect(&addr, ConnectionProperties::default())
+      let uri = addr.parse::<AMQPUri>().unwrap();
+
+      let connect = move |uri: &AMQPUri| {
+        let conn = uri.connect().and_then(|stream| {
+          let connector = RustlsConnector::new_with_native_certs().unwrap();
+          stream.into_rustls(&connector, &uri.authority.host)
+        });
+        conn
+      };
+
+      let conn = Connection::connector(uri, Box::new(connect), ConnectionProperties::default())
         .await
         .expect("connects to rabbitmq ok");
 
