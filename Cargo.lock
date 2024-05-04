@@ -4795,7 +4795,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "495b0abdce3dc1f8fd27240651c9e68890c14e9d9c61527b1ce44d8a5a7bd3d5"
 dependencies = [
  "cfg-if 1.0.0",
- "native-tls",
  "p12-keystore",
  "rustls-connector",
  "rustls-pemfile 2.1.2",
