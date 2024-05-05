@@ -6,14 +6,16 @@ use chrono::Utc;
 use clap::Parser;
 use futures::StreamExt;
 use lapin::tcp::{AMQPUriTcpExt, RustlsConnector};
-use lapin::uri::AMQPUri;
+use lapin::uri::{AMQPAuthority, AMQPQueryString, AMQPScheme, AMQPUri, AMQPUserInfo};
 use lapin::{options::*, types::FieldTable, Connection, ConnectionProperties};
 use rand::distributions::DistString;
+use rustls::ClientConfig;
 use sqlx::postgres::PgPoolOptions;
 use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
 
 use crate::index::event::Event;
+use crate::no_op_verifier::NoOpVerifier;
 use crate::ord_api_client::OrdApiClient;
 use crate::ord_db_client::OrdDbClient;
 use crate::ord_indexation::OrdIndexation;
@@ -39,10 +41,31 @@ impl EventConsumer {
         .rabbitmq_addr()
         .context("rabbitmq amqp credentials and url must be defined")?;
 
-      let uri = addr.parse::<AMQPUri>().unwrap();
+      // let uri = addr.parse::<AMQPUri>().unwrap();
+
+      let uri = AMQPUri {
+        scheme: AMQPScheme::AMQP,
+        authority: AMQPAuthority {
+          userinfo: AMQPUserInfo {
+            username: "indexer".into(),
+            password: addr.into(),
+          },
+          host: "b-3a9cd5ac-5f8c-457b-a8d7-e1ba88a07c29.mq.us-east-1.amazonaws.com".into(),
+          port: 5671,
+        },
+        vhost: "/".into(),
+        query: AMQPQueryString::default(),
+      };
 
       let connect = move |uri: &AMQPUri| {
         let conn = uri.connect().and_then(|stream| {
+          // let config = ClientConfig::builder()
+          //   .dangerous()
+          //   .with_custom_certificate_verifier(Arc::new(NoOpVerifier))
+          //   .with_no_client_auth();
+          //
+          // let connector = RustlsConnector::from(config);
+
           let connector = RustlsConnector::new_with_native_certs().unwrap();
           stream.into_rustls(&connector, &uri.authority.host)
         });
