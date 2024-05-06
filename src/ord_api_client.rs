@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use bitcoin::Txid;
+use http::StatusCode;
 use reqwest::{Client, RequestBuilder};
 use tokio::time::sleep;
 
@@ -35,6 +36,8 @@ impl OrdApiClient {
     let mut attempts = 0;
     let mut delay = Duration::from_secs(1);
 
+    let mut last_error: Option<String> = None;
+
     while attempts < max_attempts {
       let request = request_builder
         .try_clone()
@@ -56,13 +59,19 @@ impl OrdApiClient {
               |status_code| status_code.is_server_error() || status_code.is_client_error(),
             ) =>
           {
+            last_error = Some(format!(
+              "{}: {}",
+              e.status().unwrap_or(StatusCode::from_u16(0).unwrap()),
+              e
+            ));
             attempts += 1;
             sleep(delay).await;
             delay *= 2;
           }
           Err(e) => return Err(anyhow!(e)),
         },
-        Err(_e) => {
+        Err(e) => {
+          last_error = Some(e.to_string());
           attempts += 1;
           sleep(delay).await;
           delay *= 2;
@@ -70,7 +79,12 @@ impl OrdApiClient {
       }
     }
 
-    Err(anyhow!("Exceeded maximum retry attempts"))
+    Err(anyhow!(
+      "Exceeded maximum retry attempts after {} tries. Last error: {}. Attempted endpoint: {}",
+      max_attempts,
+      last_error.unwrap_or_else(|| "No error captured".to_string()),
+      request_builder.build().unwrap().url().to_string()
+    ))
   }
 
   pub async fn fetch_inscription_details(
