@@ -5,7 +5,7 @@ use lapin::tcp::{AMQPUriTcpExt, NativeTlsConnector};
 use lapin::uri::AMQPUri;
 use lapin::{Connection, ConnectionProperties};
 
-pub async fn connect_to_rabbitmq(addr: &String) -> Result<Connection, anyhow::Error> {
+pub async fn connect_to_rabbitmq(addr: &str) -> Result<Connection, anyhow::Error> {
   let uri = addr
     .parse::<AMQPUri>()
     .map_err(anyhow::Error::msg)
@@ -22,7 +22,7 @@ pub async fn connect_to_rabbitmq(addr: &String) -> Result<Connection, anyhow::Er
         let mut tls_builder = NativeTlsConnector::builder();
         tls_builder.danger_accept_invalid_certs(true);
         let connector = &tls_builder.build().expect("TLS configuration failed");
-        stream.into_native_tls(&connector, &uri.authority.host)
+        stream.into_native_tls(connector, &uri.authority.host)
       });
       conn
     };
