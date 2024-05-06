@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use bitcoin::Txid;
-use http::StatusCode;
 use reqwest::{Client, RequestBuilder};
 use tokio::time::sleep;
 
@@ -61,7 +60,7 @@ impl OrdApiClient {
           {
             last_error = Some(format!(
               "{}: {}",
-              e.status().unwrap_or(StatusCode::from_u16(0).unwrap()),
+              e.status().map_or("No Status Code".to_string(), |s| s.as_str().to_string()),
               e
             ));
             attempts += 1;
