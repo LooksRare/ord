@@ -1,11 +1,10 @@
 use anyhow::{Context, Result};
 use lapin::options::ConfirmSelectOptions;
-use lapin::tcp::{AMQPUriTcpExt, RustlsConnector};
-use lapin::uri::AMQPUri;
-use lapin::{options::BasicPublishOptions, BasicProperties, Connection, ConnectionProperties};
+use lapin::{options::BasicPublishOptions, BasicProperties};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 
+use crate::connect_rmq::connect_to_rabbitmq;
 use crate::index::event::Event;
 use crate::settings::Settings;
 
@@ -29,17 +28,7 @@ impl EventPublisher {
 
     std::thread::spawn(move || {
       Runtime::new().expect("runtime is setup").block_on(async {
-        let uri = addr.parse::<AMQPUri>().unwrap();
-
-        let connect = move |uri: &AMQPUri| {
-          let conn = uri.connect().and_then(|stream| {
-            let connector = RustlsConnector::new_with_native_certs().unwrap();
-            stream.into_rustls(&connector, &uri.authority.host)
-          });
-          conn
-        };
-
-        let conn = Connection::connector(uri, Box::new(connect), ConnectionProperties::default())
+        let conn = connect_to_rabbitmq(&addr)
           .await
           .expect("connects to rabbitmq ok");
 
