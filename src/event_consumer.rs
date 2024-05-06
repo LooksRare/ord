@@ -8,12 +8,16 @@ use clap::Parser;
 use futures::StreamExt;
 use lapin::{options::*, types::FieldTable};
 use rand::distributions::DistString;
-use sqlx::postgres::PgPoolOptions;
+use serde::__private::de::IdentifierDeserializer;
+use sqlx::{Connection, database};
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
+use urlencoding::encode;
 
 use crate::connect_rmq::connect_to_rabbitmq;
 use crate::index::event::Event;
+use crate::Options;
 use crate::ord_api_client::OrdApiClient;
 use crate::ord_db_client::OrdDbClient;
 use crate::ord_indexation::OrdIndexation;
@@ -59,7 +63,7 @@ impl EventConsumer {
 
       let pool = PgPoolOptions::new()
         .max_connections(5)
-        .connect(database_url)
+        .connect(encoded_database_url.as_ref())
         .await?;
       let shared_pool = Arc::new(pool);
       let ord_db_client = Arc::new(OrdDbClient::new(shared_pool.clone()));
@@ -134,6 +138,19 @@ impl EventConsumer {
 
       Ok(None)
     })
+  }
+
+  fn encode_password_in_url(url: &str) -> String {
+    let re = regex::Regex::new(r"(\w+://)([^:]+):([^@]+)@(.*)").unwrap();
+    if let Some(caps) = re.captures(url) {
+      let protocol_and_user = caps.get(1).map_or("", |m| m.as_str());
+      let username = caps.get(2).map_or("", |m| m.as_str());
+      let password = caps.get(3).map_or("", |m| m.as_str());
+      let rest_of_url = caps.get(4).map_or("", |m| m.as_str());
+      format!("{}{}:{}@{}", protocol_and_user, username, encode(password), rest_of_url)
+    } else {
+      url.to_string()
+    }
   }
 
   fn mask_password_in_url(url: &str) -> String {
