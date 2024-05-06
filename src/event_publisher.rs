@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
 use lapin::options::ConfirmSelectOptions;
-use lapin::{options::BasicPublishOptions, BasicProperties, Connection, ConnectionProperties};
+use lapin::{options::BasicPublishOptions, BasicProperties};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 
+use crate::connect_rmq::connect_to_rabbitmq;
 use crate::index::event::Event;
 use crate::settings::Settings;
 
@@ -15,7 +16,8 @@ impl EventPublisher {
   pub fn run(settings: &Settings) -> Result<Self, anyhow::Error> {
     let addr = settings
       .rabbitmq_addr()
-      .context("rabbitmq amqp credentials and url must be defined")?;
+      .context("rabbitmq amqp credentials and url must be defined")?
+      .to_owned();
 
     let exchange = settings
       .rabbitmq_exchange()
@@ -26,7 +28,7 @@ impl EventPublisher {
 
     std::thread::spawn(move || {
       Runtime::new().expect("runtime is setup").block_on(async {
-        let conn = Connection::connect(&addr, ConnectionProperties::default())
+        let conn = connect_to_rabbitmq(&addr)
           .await
           .expect("connects to rabbitmq ok");
 

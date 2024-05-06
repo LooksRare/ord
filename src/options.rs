@@ -84,10 +84,6 @@ pub struct Options {
   pub(crate) server_username: Option<String>,
   #[arg(long, help = "RMQ url.")]
   pub(crate) rabbitmq_url: Option<String>,
-  #[arg(long, help = "RMQ username.")]
-  pub(crate) rabbitmq_username: Option<String>,
-  #[arg(long, help = "RMQ password.")]
-  pub(crate) rabbitmq_password: Option<String>,
   #[arg(long, help = "RMQ exchange to publish index events.")]
   pub(crate) rabbitmq_exchange: Option<String>,
   #[arg(long, short, help = "Use regtest. Equivalent to `--chain regtest`.")]

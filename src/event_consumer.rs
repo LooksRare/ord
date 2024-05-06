@@ -5,12 +5,13 @@ use bitcoin::secp256k1::rand::distributions::Alphanumeric;
 use chrono::Utc;
 use clap::Parser;
 use futures::StreamExt;
-use lapin::{options::*, types::FieldTable, Connection, ConnectionProperties};
+use lapin::{options::*, types::FieldTable};
 use rand::distributions::DistString;
 use sqlx::postgres::PgPoolOptions;
 use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
 
+use crate::connect_rmq::connect_to_rabbitmq;
 use crate::index::event::Event;
 use crate::ord_api_client::OrdApiClient;
 use crate::ord_db_client::OrdDbClient;
@@ -37,9 +38,7 @@ impl EventConsumer {
         .rabbitmq_addr()
         .context("rabbitmq amqp credentials and url must be defined")?;
 
-      let conn = Connection::connect(&addr, ConnectionProperties::default())
-        .await
-        .expect("connects to rabbitmq ok");
+      let conn = connect_to_rabbitmq(addr).await?;
 
       let channel = conn
         .create_channel()
