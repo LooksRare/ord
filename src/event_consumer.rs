@@ -1,3 +1,4 @@
+use std::process;
 use std::sync::Arc;
 
 use anyhow::Context;
@@ -100,6 +101,10 @@ impl EventConsumer {
           blocks_shutdown_rx,
         )
         .await
+        .map_err(|e| {
+          log::error!("Error consuming blocks queue: {}", e);
+          process::exit(1);
+        })
       });
 
       let inscriptions_consumer_handle = tokio::spawn(async move {
@@ -111,6 +116,10 @@ impl EventConsumer {
           inscriptions_shutdown_rx,
         )
         .await
+        .map_err(|e| {
+          log::error!("Error consuming inscriptions queue: {}", e);
+          process::exit(1);
+        })
       });
 
       let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
@@ -139,24 +148,19 @@ impl EventConsumer {
         BasicConsumeOptions::default(),
         FieldTable::default(),
       )
-      .await
-      .expect("creates rmq consumer");
+      .await?;
 
     log::info!("Starting to consume messages from {}", queue_name);
     while let Some(result) = consumer.next().await {
-      match result {
-        Ok(delivery) => {
-          tokio::select! {
-              _ = EventConsumer::handle_delivery(delivery, &ord_indexation) => {},
-              _ = &mut shutdown_signal => {
-                  log::info!("Shutdown signal received, stopping consumer.");
-                  break;
-              },
-          }
-        }
-        Err(e) => {
-          log::error!("Error receiving delivery: {}", e);
-        }
+      let delivery = result?;
+      tokio::select! {
+          process_result = EventConsumer::handle_delivery(delivery, &ord_indexation) => {
+              process_result?;
+          },
+          _ = &mut shutdown_signal => {
+              log::info!("Shutdown signal received, stopping consumer.");
+              break;
+          },
       }
     }
 
