@@ -256,8 +256,7 @@ fn shutdown_process() {
 
 pub fn main() {
   env_logger::init();
-  ctrlc::set_handler(move || shutdown_process())
-    .expect("Error setting <CTRL-C> handler");
+  ctrlc::set_handler(shutdown_process).expect("Error setting <CTRL-C> handler");
 
   let args = Arguments::parse();
 

@@ -1,15 +1,13 @@
-use std::process;
-
 use anyhow::{Context, Result};
-use lapin::{BasicProperties, options::BasicPublishOptions};
 use lapin::options::ConfirmSelectOptions;
+use lapin::{options::BasicPublishOptions, BasicProperties};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 
-use crate::{gracefully_shutdown_indexer, shutdown_process};
 use crate::connect_rmq::connect_to_rabbitmq;
 use crate::index::event::Event;
 use crate::settings::Settings;
+use crate::shutdown_process;
 
 pub struct EventPublisher {
   pub(crate) sender: mpsc::Sender<Event>,
@@ -36,7 +34,7 @@ impl EventPublisher {
           Err(e) => {
             log::error!("Fatal error publishing to RMQ, exiting {}", e);
             shutdown_process();
-          },
+          }
         }
       })
     });
@@ -44,13 +42,14 @@ impl EventPublisher {
     Ok(EventPublisher { sender: tx })
   }
 
-  async fn consume_channel(addr: String, exchange: String, mut rx: mpsc::Receiver<Event>) -> Result<()> {
-    let conn = connect_to_rabbitmq(&addr)
-      .await?;
+  async fn consume_channel(
+    addr: String,
+    exchange: String,
+    mut rx: mpsc::Receiver<Event>,
+  ) -> Result<()> {
+    let conn = connect_to_rabbitmq(&addr).await?;
 
-    let channel = conn
-      .create_channel()
-      .await?;
+    let channel = conn.create_channel().await?;
 
     channel
       .confirm_select(ConfirmSelectOptions::default())
