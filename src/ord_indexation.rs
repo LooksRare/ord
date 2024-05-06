@@ -7,10 +7,10 @@ use serde_json::Value;
 use ordinals::SatPoint;
 
 use crate::api::BlockInfo;
-use crate::InscriptionId;
 use crate::ord_api_client::OrdApiClient;
 use crate::ord_db_client::{Event, OrdDbClient};
 use crate::settings::Settings;
+use crate::InscriptionId;
 
 pub struct OrdIndexation {
   settings: Settings,
@@ -101,11 +101,11 @@ impl OrdIndexation {
         inscription_id,
         event.block_height,
         block_info.timestamp,
-        event.location.as_ref().map(|loc| loc.outpoint.txid.clone()),
+        event.location.as_ref().map(|loc| loc.outpoint.txid),
         to_location_details
           .as_ref()
           .map(|details| details.0.clone()),
-        event.location.as_ref().map(|loc| loc.outpoint.clone()),
+        event.location.as_ref().map(|loc| loc.outpoint),
         event.location.as_ref().map(|loc| loc.offset),
         None,
         None,
@@ -122,18 +122,12 @@ impl OrdIndexation {
       let cursor = Cursor::new(bytes);
       let result = from_reader(cursor);
       match result {
-        Ok(value) => {
-          match &value {
-            Value::Object(obj) if obj.is_empty() => None,
-            Value::Object(_) | Value::Array(_) => serde_json::to_string(&value).ok(),
-            _ => {
-              Some(hex::encode(bytes))
-            }
-          }
+        Ok(value) => match &value {
+          Value::Object(obj) if obj.is_empty() => None,
+          Value::Object(_) | Value::Array(_) => serde_json::to_string(&value).ok(),
+          _ => Some(hex::encode(bytes)),
         },
-        Err(_) => {
-          Some(hex::encode(bytes))
-        }
+        Err(_) => Some(hex::encode(bytes)),
       }
     })
   }
@@ -170,16 +164,16 @@ impl OrdIndexation {
         inscription_id,
         event.block_height,
         block_info.timestamp,
-        event.location.as_ref().map(|loc| loc.outpoint.txid.clone()),
+        event.location.as_ref().map(|loc| loc.outpoint.txid),
         to_location_details
           .as_ref()
           .map(|details| details.0.clone()),
-        event.location.as_ref().map(|loc| loc.outpoint.clone()),
+        event.location.as_ref().map(|loc| loc.outpoint),
         event.location.as_ref().map(|loc| loc.offset),
         from_location_details
           .as_ref()
           .map(|details| details.0.clone()),
-        event.old_location.as_ref().map(|loc| loc.outpoint.clone()),
+        event.old_location.as_ref().map(|loc| loc.outpoint),
         event.old_location.as_ref().map(|loc| loc.offset),
         to_location_details.as_ref().map(|details| details.1),
       )
@@ -192,10 +186,7 @@ impl OrdIndexation {
     &self,
     location: &SatPoint,
   ) -> Result<Option<(String, u64)>, anyhow::Error> {
-    let tx_details = self
-      .ord_api_client
-      .fetch_tx(location.outpoint.txid.clone())
-      .await?;
+    let tx_details = self.ord_api_client.fetch_tx(location.outpoint.txid).await?;
 
     let output = tx_details
       .transaction

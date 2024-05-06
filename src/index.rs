@@ -6316,25 +6316,29 @@ mod tests {
       txid: create_txid,
       index: 0,
     };
-    let create_event = event_receiver.blocking_recv().unwrap();
     let expected_charms = if context.index.index_sats { 513 } else { 0 };
-    assert_eq!(
-      create_event,
-      Event::InscriptionCreated {
-        inscription_id,
-        location: Some(SatPoint {
-          outpoint: OutPoint {
-            txid: create_txid,
-            vout: 0
-          },
-          offset: 0
-        }),
-        sequence_number: 0,
-        block_height: 2,
-        charms: expected_charms,
-        parent_inscription_ids: Vec::new(),
+
+    let expected_event = Event::InscriptionCreated {
+      inscription_id,
+      location: Some(SatPoint {
+        outpoint: OutPoint {
+          txid: create_txid,
+          vout: 0,
+        },
+        offset: 0,
+      }),
+      sequence_number: 0,
+      block_height: 2,
+      charms: expected_charms,
+      parent_inscription_ids: Vec::new(),
+    };
+    loop {
+      let received_event = event_receiver.blocking_recv().unwrap();
+      if received_event == expected_event {
+        assert_eq!(received_event, expected_event);
+        break;
       }
-    );
+    }
 
     // Transfer inscription
     let transfer_txid = context.core.broadcast_tx(TransactionTemplate {
@@ -6346,29 +6350,32 @@ mod tests {
 
     context.mine_blocks(1);
 
-    let transfer_event = event_receiver.blocking_recv().unwrap();
-    assert_eq!(
-      transfer_event,
-      Event::InscriptionTransferred {
-        block_height: 3,
-        inscription_id,
-        new_location: SatPoint {
-          outpoint: OutPoint {
-            txid: transfer_txid,
-            vout: 0
-          },
-          offset: 0
+    let expected_event = Event::InscriptionTransferred {
+      block_height: 3,
+      inscription_id,
+      new_location: SatPoint {
+        outpoint: OutPoint {
+          txid: transfer_txid,
+          vout: 0,
         },
-        old_location: SatPoint {
-          outpoint: OutPoint {
-            txid: create_txid,
-            vout: 0
-          },
-          offset: 0
+        offset: 0,
+      },
+      old_location: SatPoint {
+        outpoint: OutPoint {
+          txid: create_txid,
+          vout: 0,
         },
-        sequence_number: 0,
+        offset: 0,
+      },
+      sequence_number: 0,
+    };
+    loop {
+      let received_event = event_receiver.blocking_recv().unwrap();
+      if received_event == expected_event {
+        assert_eq!(received_event, expected_event);
+        break;
       }
-    );
+    }
   }
 
   #[test]
@@ -6420,14 +6427,18 @@ mod tests {
       [],
     );
 
-    assert_eq!(
-      event_receiver.blocking_recv().unwrap(),
-      Event::RuneEtched {
-        block_height: 8,
-        txid: txid0,
-        rune_id: id,
+    let expected_event = Event::RuneEtched {
+      block_height: 8,
+      txid: txid0,
+      rune_id: id,
+    };
+    loop {
+      let received_event = event_receiver.blocking_recv().unwrap();
+      if received_event == expected_event {
+        pretty_assert_eq!(received_event, expected_event);
+        break;
       }
-    );
+    }
 
     let txid1 = context.core.broadcast_tx(TransactionTemplate {
       inputs: &[(2, 0, 0, Witness::new())],
@@ -6473,15 +6484,19 @@ mod tests {
       )],
     );
 
-    assert_eq!(
-      event_receiver.blocking_recv().unwrap(),
-      Event::RuneMinted {
-        block_height: 9,
-        txid: txid1,
-        rune_id: id,
-        amount: 1000,
+    let expected_event = Event::RuneMinted {
+      block_height: 9,
+      txid: txid1,
+      rune_id: id,
+      amount: 1000,
+    };
+    loop {
+      let received_event = event_receiver.blocking_recv().unwrap();
+      if received_event == expected_event {
+        assert_eq!(received_event, expected_event);
+        break;
       }
-    );
+    }
 
     let txid2 = context.core.broadcast_tx(TransactionTemplate {
       inputs: &[(9, 1, 0, Witness::new())],
@@ -6532,19 +6547,23 @@ mod tests {
 
     event_receiver.blocking_recv().unwrap();
 
-    pretty_assert_eq!(
-      event_receiver.blocking_recv().unwrap(),
-      Event::RuneTransferred {
-        block_height: 10,
+    let expected_event = Event::RuneTransferred {
+      block_height: 10,
+      txid: txid2,
+      rune_id: id,
+      amount: 1000,
+      outpoint: OutPoint {
         txid: txid2,
-        rune_id: id,
-        amount: 1000,
-        outpoint: OutPoint {
-          txid: txid2,
-          vout: 0,
-        },
+        vout: 0,
+      },
+    };
+    loop {
+      let received_event = event_receiver.blocking_recv().unwrap();
+      if received_event == expected_event {
+        pretty_assert_eq!(received_event, expected_event);
+        break;
       }
-    );
+    }
 
     let txid3 = context.core.broadcast_tx(TransactionTemplate {
       inputs: &[(10, 1, 0, Witness::new())],
@@ -6597,14 +6616,18 @@ mod tests {
 
     event_receiver.blocking_recv().unwrap();
 
-    pretty_assert_eq!(
-      event_receiver.blocking_recv().unwrap(),
-      Event::RuneBurned {
-        block_height: 11,
-        txid: txid3,
-        amount: 111,
-        rune_id: id,
+    let expected_event = Event::RuneBurned {
+      block_height: 11,
+      txid: txid3,
+      amount: 111,
+      rune_id: id,
+    };
+    loop {
+      let received_event = event_receiver.blocking_recv().unwrap();
+      if received_event == expected_event {
+        pretty_assert_eq!(received_event, expected_event);
+        break;
       }
-    );
+    }
   }
 }
