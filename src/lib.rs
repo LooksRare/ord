@@ -238,24 +238,26 @@ fn gracefully_shutdown_indexer() {
   }
 }
 
+fn shutdown_process() {
+  if SHUTTING_DOWN.fetch_or(true, atomic::Ordering::Relaxed) {
+    process::exit(1);
+  }
+
+  eprintln!("Shutting down gracefully. Press <CTRL-C> again to shutdown immediately.");
+
+  LISTENERS
+    .lock()
+    .unwrap()
+    .iter()
+    .for_each(|handle| handle.graceful_shutdown(Some(Duration::from_millis(100))));
+
+  gracefully_shutdown_indexer();
+}
+
 pub fn main() {
   env_logger::init();
-  ctrlc::set_handler(move || {
-    if SHUTTING_DOWN.fetch_or(true, atomic::Ordering::Relaxed) {
-      process::exit(1);
-    }
-
-    eprintln!("Shutting down gracefully. Press <CTRL-C> again to shutdown immediately.");
-
-    LISTENERS
-      .lock()
-      .unwrap()
-      .iter()
-      .for_each(|handle| handle.graceful_shutdown(Some(Duration::from_millis(100))));
-
-    gracefully_shutdown_indexer();
-  })
-  .expect("Error setting <CTRL-C> handler");
+  ctrlc::set_handler(move || shutdown_process())
+    .expect("Error setting <CTRL-C> handler");
 
   let args = Arguments::parse();
 

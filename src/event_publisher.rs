@@ -1,9 +1,12 @@
+use std::process;
+
 use anyhow::{Context, Result};
+use lapin::{BasicProperties, options::BasicPublishOptions};
 use lapin::options::ConfirmSelectOptions;
-use lapin::{options::BasicPublishOptions, BasicProperties};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 
+use crate::{gracefully_shutdown_indexer, shutdown_process};
 use crate::connect_rmq::connect_to_rabbitmq;
 use crate::index::event::Event;
 use crate::settings::Settings;
@@ -24,49 +27,57 @@ impl EventPublisher {
       .context("rabbitmq exchange path must be defined")?
       .to_owned();
 
-    let (tx, mut rx) = mpsc::channel::<Event>(128);
+    let (tx, rx) = mpsc::channel::<Event>(128);
 
     std::thread::spawn(move || {
       Runtime::new().expect("runtime is setup").block_on(async {
-        let conn = connect_to_rabbitmq(&addr)
-          .await
-          .expect("connects to rabbitmq ok");
-
-        let channel = conn
-          .create_channel()
-          .await
-          .expect("creates rmq connection channel");
-
-        channel
-          .confirm_select(ConfirmSelectOptions::default())
-          .await
-          .expect("enable msg confirms");
-
-        while let Some(event) = rx.recv().await {
-          // TODO we might want to panic if rmq is down so we don't miss any messages
-          //  if we miss messages only way to replay them is run `ord` instance from scratch
-          //  maybe we can trigger fake reorg to force it to reindex from savepoint?
-          let message = serde_json::to_vec(&event).expect("failed to serialize event");
-
-          let publish = channel
-            .basic_publish(
-              &exchange,
-              EventPublisher::type_name(&event),
-              BasicPublishOptions::default(),
-              &message,
-              BasicProperties::default(),
-            )
-            .await
-            .expect("published rmq msg")
-            .await
-            .expect("confirms rmq msg received");
-
-          assert!(publish.is_ack());
+        match EventPublisher::consume_channel(addr, exchange, rx).await {
+          Ok(_) => log::info!("Channel closed."),
+          Err(e) => {
+            log::error!("Fatal error publishing to RMQ, exiting {}", e);
+            shutdown_process();
+          },
         }
       })
     });
 
     Ok(EventPublisher { sender: tx })
+  }
+
+  async fn consume_channel(addr: String, exchange: String, mut rx: mpsc::Receiver<Event>) -> Result<()> {
+    let conn = connect_to_rabbitmq(&addr)
+      .await?;
+
+    let channel = conn
+      .create_channel()
+      .await?;
+
+    channel
+      .confirm_select(ConfirmSelectOptions::default())
+      .await?;
+
+    while let Some(event) = rx.recv().await {
+      let message = serde_json::to_vec(&event)?;
+
+      let publish = channel
+        .basic_publish(
+          &exchange,
+          EventPublisher::type_name(&event),
+          BasicPublishOptions::default(),
+          &message,
+          BasicProperties::default(),
+        )
+        .await?
+        .await?;
+
+      if !publish.is_ack() {
+        return Err(anyhow::Error::new(std::io::Error::new(
+          std::io::ErrorKind::Other,
+          "Message was not acknowledged",
+        )));
+      }
+    }
+    Ok(())
   }
 
   fn type_name(event: &Event) -> &'static str {
