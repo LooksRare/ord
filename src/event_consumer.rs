@@ -55,6 +55,8 @@ impl EventConsumer {
         .database_url
         .as_deref()
         .context("db url must be defined")?;
+      log::info!("Connecting to database at {}", EventConsumer::mask_password_in_url(database_url));
+
       let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect(database_url)
@@ -132,6 +134,11 @@ impl EventConsumer {
 
       Ok(None)
     })
+  }
+
+  fn mask_password_in_url(url: &str) -> String {
+    let re = regex::Regex::new(r"(\w+://)([^:]+):([^@]+)@").unwrap();
+    re.replace(url, "$1$2:***@").to_string()
   }
 
   async fn consume_queue(
