@@ -8,16 +8,13 @@ use clap::Parser;
 use futures::StreamExt;
 use lapin::{options::*, types::FieldTable};
 use rand::distributions::DistString;
-use serde::__private::de::IdentifierDeserializer;
-use sqlx::{Connection, database};
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use sqlx::postgres::PgPoolOptions;
 use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
 use urlencoding::encode;
 
 use crate::connect_rmq::connect_to_rabbitmq;
 use crate::index::event::Event;
-use crate::Options;
 use crate::ord_api_client::OrdApiClient;
 use crate::ord_db_client::OrdDbClient;
 use crate::ord_indexation::OrdIndexation;
@@ -59,7 +56,10 @@ impl EventConsumer {
         .database_url
         .as_deref()
         .context("db url must be defined")?;
-      log::info!("Connecting to database at {}", EventConsumer::mask_password_in_url(database_url));
+      log::info!(
+        "Connecting to database at {}",
+        EventConsumer::mask_password_in_url(database_url)
+      );
       let encoded_database_url = EventConsumer::encode_password_in_url(database_url);
 
       let pool = PgPoolOptions::new()
@@ -148,7 +148,13 @@ impl EventConsumer {
       let username = caps.get(2).map_or("", |m| m.as_str());
       let password = caps.get(3).map_or("", |m| m.as_str());
       let rest_of_url = caps.get(4).map_or("", |m| m.as_str());
-      format!("{}{}:{}@{}", protocol_and_user, username, encode(password), rest_of_url)
+      format!(
+        "{}{}:{}@{}",
+        protocol_and_user,
+        username,
+        encode(password),
+        rest_of_url
+      )
     } else {
       url.to_string()
     }
