@@ -10,19 +10,6 @@ pub enum Rarity {
   Mythic,
 }
 
-impl Rarity {
-  pub fn to_i32(&self) -> i32 {
-    match self {
-      Rarity::Common => 0,
-      Rarity::Uncommon => 1,
-      Rarity::Rare => 2,
-      Rarity::Epic => 3,
-      Rarity::Legendary => 4,
-      Rarity::Mythic => 5,
-    }
-  }
-}
-
 impl From<Rarity> for u8 {
   fn from(rarity: Rarity) -> Self {
     rarity as u8

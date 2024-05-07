@@ -165,7 +165,7 @@ impl OrdDbClient {
       inscription_details.genesis_block_height as i32,
       inscription_details.genesis_block_time,
       inscription_details.sat_number.map(|n| n as i64),
-      inscription_details.sat_rarity.map(|r| r.to_i32()),
+      inscription_details.sat_rarity.map(|r| r as i32),
       inscription_details.sat_block_height.map(|n| n as i32),
       inscription_details.sat_block_time,
       inscription_details.fee as i64,
