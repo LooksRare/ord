@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n      INSERT INTO event (type_id, block_height, inscription_id, location, old_location)\n      SELECT $1, $2, $3, $4, $5\n      WHERE NOT EXISTS (\n          SELECT 1 FROM event\n          WHERE type_id = $1 AND block_height = $2 AND inscription_id = $3 AND location = $4 AND old_location = $5\n      )\n      ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int2",
+        "Int8",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7d3e8f006c4f66cff514bb7bcf5314d0d235da28ead0b89fdaa090cf2f16a151"
+}

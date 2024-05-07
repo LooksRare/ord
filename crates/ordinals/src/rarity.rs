@@ -11,7 +11,7 @@ pub enum Rarity {
 }
 
 impl Rarity {
-  pub fn to_i16(&self) -> i16 {
+  pub fn to_i32(&self) -> i32 {
     match self {
       Rarity::Common => 0,
       Rarity::Uncommon => 1,
