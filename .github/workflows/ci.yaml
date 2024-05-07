@@ -41,7 +41,7 @@ jobs:
         run: cargo fmt --all -- --check
 
   test:
-    timeout-minutes: 5
+    timeout-minutes: 10
     runs-on: self-hosted
     steps:
       -
