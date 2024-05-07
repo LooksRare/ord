@@ -239,7 +239,7 @@ impl OrdDbClient {
                 from_address = $8 AND
                 prev_output = $9 AND
                 prev_offset = $10::BIGINT AND
-                value = $10::BIGINT
+                value = $11::BIGINT
         );
     ";
     sqlx::query(query)
