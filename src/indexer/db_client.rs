@@ -49,7 +49,7 @@ impl DbClient {
 
   pub async fn fetch_events_by_block_height(
     &self,
-    block_height: u32,
+    block_height: &u32,
   ) -> Result<Vec<Event>, sqlx::Error> {
     let query = "
         SELECT type_id, block_height, inscription_id, location, old_location

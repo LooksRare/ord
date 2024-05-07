@@ -30,41 +30,39 @@ impl InscriptionIndexation {
     }
   }
 
-  pub async fn sync_blocks(&self, from_height: &u32, to_height: &u32) -> Result<(), anyhow::Error> {
-    log::info!("Blocks committed event from={from_height} (excluded), to={to_height} (included)");
+  pub async fn sync_blocks(&self, block_height: &u32) -> Result<(), anyhow::Error> {
+    log::info!("Blocks committed event for={block_height}");
 
-    for block_height in *from_height + 1..=*to_height {
-      let events = self
-        .ord_db_client
-        .fetch_events_by_block_height(block_height)
-        .await?;
-      let block_info = self.ord_api_client.fetch_block_info(block_height).await?;
-      for event in events {
-        match event.type_id {
-          1 => {
-            if let Err(e) = self.process_inscription_created(&event, &block_info).await {
-              log::error!(
-                "Error processing inscription creation for event {:?}: {}",
-                event,
-                e
-              );
-            }
+    let events = self
+      .ord_db_client
+      .fetch_events_by_block_height(block_height)
+      .await?;
+    let block_info = self.ord_api_client.fetch_block_info(block_height).await?;
+    for event in events {
+      match event.type_id {
+        1 => {
+          if let Err(e) = self.process_inscription_created(&event, &block_info).await {
+            log::error!(
+              "Error processing inscription creation for event {:?}: {}",
+              event,
+              e
+            );
           }
-          2 => {
-            if let Err(e) = self
-              .process_inscription_transferred(&event, &block_info)
-              .await
-            {
-              log::error!(
-                "Error processing inscription transferred for event {:?}: {}",
-                event,
-                e
-              );
-            }
+        }
+        2 => {
+          if let Err(e) = self
+            .process_inscription_transferred(&event, &block_info)
+            .await
+          {
+            log::error!(
+              "Error processing inscription transferred for event {:?}: {}",
+              event,
+              e
+            );
           }
-          _ => {
-            log::warn!("Unhandled event type: {}", event.type_id);
-          }
+        }
+        _ => {
+          log::warn!("Unhandled event type: {}", event.type_id);
         }
       }
     }

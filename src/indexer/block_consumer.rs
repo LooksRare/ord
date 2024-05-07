@@ -156,14 +156,7 @@ impl BlockConsumer {
     inscription_indexation: &Arc<InscriptionIndexation>,
   ) -> Result<(), anyhow::Error> {
     match &event {
-      Event::BlockCommitted {
-        from_height,
-        to_height,
-      } => {
-        inscription_indexation
-          .sync_blocks(from_height, to_height)
-          .await?
-      }
+      Event::BlockCommitted { height } => inscription_indexation.sync_blocks(height).await?,
       _ => {
         log::warn!("Received an unhandled event type {:?}", event);
       }

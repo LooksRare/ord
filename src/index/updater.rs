@@ -748,8 +748,7 @@ impl<'index> Updater<'index> {
       if let Ok(uncommitted) = u32::try_from(uncommitted) {
         for current_height in (self.height - uncommitted)..=self.height {
           sender.blocking_send(Event::BlockCommitted {
-            from_height: current_height - 1,
-            to_height: current_height,
+            height: current_height,
           })?;
         }
       } else {

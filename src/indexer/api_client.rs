@@ -109,7 +109,7 @@ impl ApiClient {
     self.execute_with_retries(request_builder, 3).await
   }
 
-  pub async fn fetch_block_info(&self, block_height: u32) -> Result<BlockInfo, anyhow::Error> {
+  pub async fn fetch_block_info(&self, block_height: &u32) -> Result<BlockInfo, anyhow::Error> {
     let request_builder = self
       .client
       .get(format!("{}/r/blockinfo/{}", self.ord_api_url, block_height))
