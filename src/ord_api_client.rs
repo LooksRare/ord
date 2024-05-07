@@ -60,7 +60,8 @@ impl OrdApiClient {
           {
             last_error = Some(format!(
               "{}: {}",
-              e.status().map_or("No Status Code".to_string(), |s| s.as_str().to_string()),
+              e.status()
+                .map_or("No Status Code".to_string(), |s| s.as_str().to_string()),
               e
             ));
             attempts += 1;
