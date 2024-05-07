@@ -21,6 +21,31 @@ currently prioritized issues.
 Join [the Discord server](https://discord.gg/87cjuz4FYg) to chat with fellow
 ordinal degenerates.
 
+LooksRare Ordinals
+------------------
+
+**Setup**
+
+1. Setup the local `ordinals` database
+`$ psql -h localhost -d postgres -q -f db/config.sql`
+
+2. Run the migrations. 
+`cargo sqlx database setup --database-url $DATABASE_URL --source db/migrations/`
+
+Note database url is likely to be _postgres://backend:looks-backend@localhost:5432/ordinals"_
+
+**Examples running via command line:**
+
+To run ord event server
+```
+ord --bitcoin-rpc-url "http://localhost:18332" --bitcoin-rpc-username user --bitcoin-rpc-password password --commit-interval 10 --rabbitmq-url localhost --rabbitmq-password s3cr3t --rabbitmq-username indexer --rabbitmq-exchange ord-tx --chain testnet --data-dir ./index-data event-server --http-port 8080
+```
+
+To run ord event indexer
+```
+ord --rabbitmq-url localhost --rabbitmq-password s3cr3t --rabbitmq-username indexer event-consumer --blocks-queue btc-blocks-q --inscriptions-queue btc-inscription-q --database-url postgresql://backend:looks-backend@localhost:55432/ordinals --ord-api-url http://localhost:8080
+```
+
 Donate
 ------
 
@@ -194,18 +219,6 @@ Or in the config file:
 ```yaml
 bitcoin_rpc_username: foo
 bitcoin_rpc_password: bar
-```
-
-Examples running via command line:
-
-To run ord event server
-```
-ord --bitcoin-rpc-url "http://localhost:18332" --bitcoin-rpc-username user --bitcoin-rpc-password password --commit-interval 10 --rabbitmq-url localhost --rabbitmq-password s3cr3t --rabbitmq-username indexer --rabbitmq-exchange ord-tx --chain testnet --data-dir ./index-data event-server --http-port 8080
-```
-
-To run ord event indexer
-```
-ord --rabbitmq-url localhost --rabbitmq-password s3cr3t --rabbitmq-username indexer event-consumer --blocks-queue btc-blocks-q --inscriptions-queue btc-inscription-q --database-url postgresql://backend:looks-backend@localhost:55432/ordinals --ord-api-url http://localhost:8080
 ```
 
 Logging
