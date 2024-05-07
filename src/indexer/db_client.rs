@@ -38,11 +38,11 @@ impl Event {
   }
 }
 
-pub struct OrdDbClient {
+pub struct DbClient {
   pool: Arc<PgPool>,
 }
 
-impl OrdDbClient {
+impl DbClient {
   pub fn new(pool: Arc<PgPool>) -> Self {
     Self { pool }
   }
@@ -85,12 +85,12 @@ impl OrdDbClient {
             WHERE type_id = $1 AND block_height = $2::BIGINT AND inscription_id = $3 AND location = $4
         )";
     sqlx::query(query)
-      .bind(1_i32) // Type ID for InscriptionCreated
-      .bind(block_height.to_string())
-      .bind(inscription_id.to_string())
-      .bind(location.map(|loc| loc.to_string()))
-      .execute(&*self.pool)
-      .await?;
+            .bind(1_i32) // Type ID for InscriptionCreated
+            .bind(block_height.to_string())
+            .bind(inscription_id.to_string())
+            .bind(location.map(|loc| loc.to_string()))
+            .execute(&*self.pool)
+            .await?;
     Ok(())
   }
 
@@ -109,13 +109,13 @@ impl OrdDbClient {
             WHERE type_id = $1 AND block_height = $2::BIGINT AND inscription_id = $3 AND location = $4 AND old_location = $5
         )";
     sqlx::query(query)
-      .bind(2_i32) // Type ID for InscriptionTransferred
-      .bind(block_height.to_string())
-      .bind(inscription_id.to_string())
-      .bind(new_location.to_string())
-      .bind(old_location.to_string())
-      .execute(&*self.pool)
-      .await?;
+            .bind(2_i32) // Type ID for InscriptionTransferred
+            .bind(block_height.to_string())
+            .bind(inscription_id.to_string())
+            .bind(new_location.to_string())
+            .bind(old_location.to_string())
+            .execute(&*self.pool)
+            .await?;
     Ok(())
   }
 

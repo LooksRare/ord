@@ -1,6 +1,6 @@
-use crate::event_publisher::EventPublisher;
-
 use super::*;
+use crate::indexer::event_publisher::EventPublisher;
+use crate::indexer::{block_consumer, event_consumer};
 
 pub mod balances;
 pub mod decode;
@@ -43,8 +43,10 @@ pub(crate) enum Subcommand {
   Server(server::Server),
   #[command(about = "Run the explorer server in event emit mode")]
   EventServer(server::Server),
-  #[command(about = "Run the index event consumer")]
+  #[command(about = "Run inscription event consumer")]
   EventConsumer(event_consumer::EventConsumer),
+  #[command(about = "Run block event consumer")]
+  BlockConsumer(block_consumer::BlockConsumer),
   #[command(about = "Display settings")]
   Settings,
   #[command(about = "Display information about a block's subsidy")]
@@ -89,6 +91,7 @@ impl Subcommand {
         server.run(settings, index, handle)
       }
       Self::EventConsumer(event_consumer) => event_consumer.run(&settings),
+      Self::BlockConsumer(block_consumer) => block_consumer.run(&settings),
       Self::Settings => settings::run(settings),
       Self::Subsidy(subsidy) => subsidy.run(),
       Self::Supply => supply::run(),

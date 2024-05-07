@@ -7,22 +7,21 @@ use serde_json::Value;
 use ordinals::SatPoint;
 
 use crate::api::BlockInfo;
-use crate::ord_api_client::OrdApiClient;
-use crate::ord_db_client::{Event, OrdDbClient};
+use crate::indexer::api_client::ApiClient;
+use crate::indexer::db_client::{DbClient, Event};
 use crate::settings::Settings;
-use crate::InscriptionId;
 
-pub struct OrdIndexation {
+pub struct InscriptionIndexation {
   settings: Settings,
-  ord_db_client: Arc<OrdDbClient>,
-  ord_api_client: Arc<OrdApiClient>,
+  ord_db_client: Arc<DbClient>,
+  ord_api_client: Arc<ApiClient>,
 }
 
-impl OrdIndexation {
+impl InscriptionIndexation {
   pub fn new(
     settings: &Settings,
-    ord_db_client: Arc<OrdDbClient>,
-    ord_api_client: Arc<OrdApiClient>,
+    ord_db_client: Arc<DbClient>,
+    ord_api_client: Arc<ApiClient>,
   ) -> Self {
     Self {
       settings: settings.clone(),
@@ -209,32 +208,5 @@ impl OrdIndexation {
       Some(addr) => Ok(Some((addr, output.unwrap().value))),
       None => Ok(None),
     }
-  }
-
-  pub async fn save_inscription_created(
-    &self,
-    block_height: &u32,
-    inscription_id: &InscriptionId,
-    location: &Option<SatPoint>,
-  ) -> Result<(), anyhow::Error> {
-    self
-      .ord_db_client
-      .save_inscription_created(block_height, inscription_id, location)
-      .await?;
-    Ok(())
-  }
-
-  pub async fn save_inscription_transferred(
-    &self,
-    block_height: &u32,
-    inscription_id: &InscriptionId,
-    new_location: &SatPoint,
-    old_location: &SatPoint,
-  ) -> Result<(), anyhow::Error> {
-    self
-      .ord_db_client
-      .save_inscription_transferred(block_height, inscription_id, new_location, old_location)
-      .await?;
-    Ok(())
   }
 }
