@@ -45,7 +45,7 @@ impl BlockConsumer {
       let db_client = Arc::new(DbClient::new(shared_pool.clone()));
 
       let api_url = self.ord_api_url.context("api url must be defined")?;
-      let api_c = ApiClient::new(api_url.clone()).expect("api client must exist");
+      let api_c = ApiClient::new(api_url.clone()).context("Failed to create API client")?;
       let api_client = Arc::new(api_c);
 
       let inscription_indexation =
