@@ -2,10 +2,10 @@
   clippy::large_enum_variant,
   clippy::result_large_err,
   clippy::too_many_arguments,
+  clippy::cast_lossless,
   clippy::type_complexity
 )]
 #![deny(
-  clippy::cast_lossless,
   clippy::cast_possible_truncation,
   clippy::cast_possible_wrap,
   clippy::cast_sign_loss

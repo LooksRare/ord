@@ -1,10 +1,8 @@
-use std::process;
-use std::sync::Arc;
-
 use anyhow::Context;
 use clap::Parser;
 use futures::StreamExt;
 use lapin::{options::*, types::FieldTable};
+use std::sync::Arc;
 use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
 
@@ -58,10 +56,7 @@ impl EventConsumer {
           inscriptions_shutdown_rx,
         )
         .await
-        .map_err(|e| {
-          log::error!("Error consuming inscriptions queue: {}", e);
-          process::exit(1);
-        })
+        .expect("error consuming inscriptions queue")
       });
 
       let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
