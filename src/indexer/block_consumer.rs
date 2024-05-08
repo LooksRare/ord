@@ -11,7 +11,6 @@ use tokio::sync::oneshot;
 use crate::index::event::Event;
 use crate::indexer::api_client::ApiClient;
 use crate::indexer::db_client::DbClient;
-use crate::indexer::db_con::setup_db_connection;
 use crate::indexer::inscription_indexation::InscriptionIndexation;
 use crate::indexer::rmq_con::{generate_consumer_tag, setup_rabbitmq_connection};
 use crate::settings::Settings;
@@ -35,21 +34,18 @@ impl BlockConsumer {
         .context("rabbitmq amqp credentials and url must be defined")?;
       let channel = setup_rabbitmq_connection(addr).await?;
 
-      let database_url = self
-        .database_url
-        .as_deref()
-        .context("db url must be defined")?;
-      let pool = setup_db_connection(database_url).await?;
-
-      let shared_pool = Arc::new(pool);
-      let db_client = Arc::new(DbClient::new(shared_pool.clone()));
+      let database_url = self.database_url.context("db url is required")?;
+      let db_client = Arc::new(DbClient::new(database_url, 2).await?);
 
       let api_url = self.ord_api_url.context("api url must be defined")?;
       let api_c = ApiClient::new(api_url.clone()).context("Failed to create API client")?;
       let api_client = Arc::new(api_c);
 
-      let inscription_indexation =
-        Arc::new(InscriptionIndexation::new(settings, db_client, api_client));
+      let inscription_indexation = Arc::new(InscriptionIndexation::new(
+        settings,
+        db_client.clone(),
+        api_client,
+      ));
 
       let blocks_queue = self
         .blocks_queue
@@ -80,7 +76,7 @@ impl BlockConsumer {
       let _ = blocks_shutdown_tx.send(());
       let _ = tokio::try_join!(blocks_consumer_handle);
 
-      shared_pool.close().await;
+      db_client.close().await;
 
       Ok(None)
     })

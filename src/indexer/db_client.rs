@@ -1,9 +1,10 @@
 use bitcoin::{OutPoint, Txid};
 use ordinals::SatPoint;
+use sqlx::postgres::PgPoolOptions;
 use sqlx::types::Json;
 use sqlx::PgPool;
+use sqlx::Result;
 use std::str::FromStr;
-use std::sync::Arc;
 
 use crate::api::InscriptionDetails;
 use crate::InscriptionId;
@@ -18,12 +19,21 @@ pub struct Event {
 }
 
 pub struct DbClient {
-  pool: Arc<PgPool>,
+  pool: PgPool,
 }
 
 impl DbClient {
-  pub fn new(pool: Arc<PgPool>) -> Self {
-    Self { pool }
+  pub async fn new(database_url: String, max_conn: u32) -> Result<Self> {
+    let pool = PgPoolOptions::new()
+      .max_connections(max_conn)
+      .connect(database_url.as_str())
+      .await?;
+
+    Ok(Self { pool })
+  }
+
+  pub async fn close(&self) {
+    self.pool.close().await;
   }
 
   pub async fn fetch_events_by_block_height(
@@ -45,7 +55,7 @@ impl DbClient {
       location: r.location.and_then(|s| SatPoint::from_str(&s).ok()),
       old_location: r.old_location.and_then(|s| SatPoint::from_str(&s).ok()),
     })
-    .fetch_all(&*self.pool)
+    .fetch_all(&self.pool)
     .await
   }
 
@@ -69,7 +79,7 @@ impl DbClient {
       inscription_id.to_string(),
       location.map(|loc| loc.to_string())
     )
-    .execute(&*self.pool)
+    .execute(&self.pool)
     .await?;
 
     Ok(())
@@ -97,7 +107,7 @@ impl DbClient {
       new_location.to_string(),
       old_location.to_string()
     )
-    .execute(&*self.pool)
+    .execute(&self.pool)
     .await?;
 
     Ok(())
@@ -112,7 +122,7 @@ impl DbClient {
       genesis_id
     )
     .map(|r| r.id)
-    .fetch_optional(&*self.pool)
+    .fetch_optional(&self.pool)
     .await
   }
 
@@ -181,7 +191,7 @@ impl DbClient {
       Json(&inscription_details.parents).encode_to_string()
     )
     .map(|r| r.id)
-    .fetch_one(&*self.pool)
+    .fetch_one(&self.pool)
     .await
   }
 
@@ -243,7 +253,7 @@ impl DbClient {
       from_offset.map(|n| i64::try_from(n).expect("from_offset should fit in pg bigint")),
       value.map(|n| i64::try_from(n).expect("value should fit in pg bigint")),
     )
-    .execute(&*self.pool)
+    .execute(&self.pool)
     .await?;
 
     Ok(())

@@ -41,14 +41,18 @@ Note `$DATABASE_URL` is likely to be _"postgres://backend:looks-backend@localhos
 
 **Running via command line:**
 
-To run ord event server
+To run ord event server (signet):
 ```
-ord --bitcoin-rpc-url "http://localhost:18332" --bitcoin-rpc-username user --bitcoin-rpc-password password --commit-interval 10 --rabbitmq-url localhost --rabbitmq-password s3cr3t --rabbitmq-username indexer --rabbitmq-exchange ord-tx --chain testnet --data-dir ./index-data event-server --http-port 8080
+RUST_LOG=info  cargo run --package ord --bin ord -- --bitcoin-rpc-url "http://localhost:38332" --bitcoin-rpc-username user --bitcoin-rpc-password password --commit-interval 10 --rabbitmq-url amqp://indexer:s3cr3t@localhost --rabbitmq-exchange ord-tx --chain signet --data-dir ./index-data event-server --http-port 8080
 ```
 
-To run ord event indexer
+To run ord event-consumer "inscription" indexer:
 ```
-ord --rabbitmq-url localhost --rabbitmq-password s3cr3t --rabbitmq-username indexer event-consumer --blocks-queue btc-blocks-q --inscriptions-queue btc-inscription-q --database-url postgresql://backend:looks-backend@localhost:55432/ordinals --ord-api-url http://localhost:8080
+RUST_LOG=info cargo run --package ord --bin ord -- --rabbitmq-url amqp://indexer:s3cr3t@localhost event-consumer --inscriptions-queue btc-inscription-q --database-url postgresql://backend:looks-backend@localhost:5432/ordinals
+```
+
+```
+RUST_LOG=info cargo run --package ord --bin ord -- --rabbitmq-url amqp://indexer:s3cr3t@localhost block-consumer --blocks-queue btc-blocks-q --database-url postgresql://backend:looks-backend@localhost:5432/ordinals --ord-api-url http://localhost:8080
 ```
 
 Donate
