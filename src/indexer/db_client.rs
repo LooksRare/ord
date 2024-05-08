@@ -9,7 +9,7 @@ use std::str::FromStr;
 use crate::api::InscriptionDetails;
 use crate::InscriptionId;
 
-#[derive(Debug, Clone, sqlx::FromRow)]
+#[derive(Debug, Clone)]
 pub struct Event {
   pub type_id: i16,
   pub block_height: i32,

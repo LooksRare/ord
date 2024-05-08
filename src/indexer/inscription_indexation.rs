@@ -1,10 +1,7 @@
-use std::io::Cursor;
-use std::sync::Arc;
-
 use ciborium::from_reader;
-use serde_json::Value;
-
 use ordinals::SatPoint;
+use serde_json::Value;
+use std::io::Cursor;
 
 use crate::api::BlockInfo;
 use crate::indexer::api_client::ApiClient;
@@ -13,16 +10,12 @@ use crate::settings::Settings;
 
 pub struct InscriptionIndexation {
   settings: Settings,
-  ord_db_client: Arc<DbClient>,
-  ord_api_client: Arc<ApiClient>,
+  ord_db_client: DbClient,
+  ord_api_client: ApiClient,
 }
 
 impl InscriptionIndexation {
-  pub fn new(
-    settings: &Settings,
-    ord_db_client: Arc<DbClient>,
-    ord_api_client: Arc<ApiClient>,
-  ) -> Self {
+  pub fn new(settings: &Settings, ord_db_client: DbClient, ord_api_client: ApiClient) -> Self {
     Self {
       settings: settings.clone(),
       ord_api_client,
