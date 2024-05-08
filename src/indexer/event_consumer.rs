@@ -2,6 +2,7 @@ use anyhow::Context;
 use clap::Parser;
 use futures::StreamExt;
 use lapin::{options::*, types::FieldTable};
+use std::sync::Arc;
 use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
 

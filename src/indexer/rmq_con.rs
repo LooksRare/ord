@@ -1,4 +1,6 @@
 use anyhow::{Context, Error};
+use chrono::Utc;
+use lapin::options::ConfirmSelectOptions;
 use lapin::tcp::{AMQPUriTcpExt, NativeTlsConnector};
 use lapin::uri::AMQPUri;
 use lapin::{Connection, ConnectionProperties};

@@ -36,7 +36,7 @@ impl DbClient {
       FROM event WHERE block_height = $1
       ORDER BY type_id ASC, id ASC
       "#,
-      i32::try_from(block_height).expect("block_height should fit in pg integer"),
+      i32::try_from(block_height.to_owned()).expect("block_height should fit in pg integer"),
     )
     .map(|r| Event {
       type_id: r.type_id,
