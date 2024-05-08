@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use ciborium::from_reader;
 use serde_json::Value;
-use sha3::digest::const_oid::db::rfc4519::L;
 
 use ordinals::SatPoint;
 
@@ -39,7 +38,7 @@ impl InscriptionIndexation {
       .fetch_events_by_block_height(block_height)
       .await?;
 
-    if (events.is_empty()) {
+    if events.is_empty() {
       return Ok(());
     }
 

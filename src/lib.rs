@@ -124,7 +124,6 @@ pub mod indexer {
   pub mod api_client;
   pub mod block_consumer;
   pub mod db_client;
-  pub mod db_con;
   pub mod event_consumer;
   pub mod event_publisher;
   pub mod inscription_indexation;
