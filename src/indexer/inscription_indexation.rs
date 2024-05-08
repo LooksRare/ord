@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use ciborium::from_reader;
 use serde_json::Value;
+use sha3::digest::const_oid::db::rfc4519::L;
 
 use ordinals::SatPoint;
 
@@ -37,6 +38,11 @@ impl InscriptionIndexation {
       .ord_db_client
       .fetch_events_by_block_height(block_height)
       .await?;
+
+    if (events.is_empty()) {
+      return Ok(());
+    }
+
     let block_info = self.ord_api_client.fetch_block_info(block_height).await?;
     for event in events {
       match event.type_id {
