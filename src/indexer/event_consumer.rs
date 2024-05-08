@@ -1,6 +1,7 @@
 use anyhow::Context;
 use clap::Parser;
 use futures::StreamExt;
+use lapin::types::AMQPValue;
 use lapin::{options::*, types::FieldTable};
 use tokio::runtime::Runtime;
 
@@ -55,11 +56,28 @@ impl EventConsumer {
   ) -> Result<(), lapin::Error> {
     let event: Result<Event, _> = serde_json::from_slice(&delivery.data);
 
+    let mut delivery_count = 0;
+    if let Some(headers) = delivery.properties.headers() {
+      if let Some(AMQPValue::LongLongInt(count)) = headers.inner().get("x-delivery-count") {
+        delivery_count = *count;
+      }
+    }
+
     match event {
       Ok(event) => {
         if let Err(err) = EventConsumer::process_event(event, db_client).await {
-          log::error!("failed to process event: {}", err);
-          delivery.reject(BasicRejectOptions { requeue: false }).await
+          if delivery_count >= 3 {
+            log::error!("failed to process event: {}, rejecting", err);
+            delivery.reject(BasicRejectOptions { requeue: false }).await
+          } else {
+            log::warn!("failed to process event: {}, requeuing", err);
+            delivery
+              .nack(BasicNackOptions {
+                multiple: false,
+                requeue: true,
+              })
+              .await
+          }
         } else {
           delivery.ack(BasicAckOptions::default()).await
         }

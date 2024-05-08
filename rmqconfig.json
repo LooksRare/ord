@@ -5,14 +5,18 @@
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {}
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
     },
     {
       "name": "btc-blocks-q",
       "vhost": "/",
       "durable": true,
       "auto_delete": false,
-      "arguments": {}
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
     }
   ],
   "exchanges": [
