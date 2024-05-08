@@ -1,7 +1,9 @@
 use anyhow::{Context, Result};
-use lapin::{options::BasicPublishOptions, BasicProperties};
+use lapin::{options::BasicPublishOptions, BasicProperties, Channel};
+use std::time::Duration;
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
+use tokio::time::sleep;
 
 use crate::index::event::Event;
 use crate::indexer::rmq_con::setup_rabbitmq_connection;
@@ -24,7 +26,7 @@ impl EventPublisher {
       .context("rabbitmq exchange path must be defined")?
       .to_owned();
 
-    let (tx, rx) = mpsc::channel::<Event>(128);
+    let (tx, rx) = mpsc::channel::<Event>(1);
 
     std::thread::spawn(move || {
       Runtime::new().expect("runtime is setup").block_on(async {
@@ -46,29 +48,62 @@ impl EventPublisher {
     exchange: String,
     mut rx: mpsc::Receiver<Event>,
   ) -> Result<()> {
-    let channel = setup_rabbitmq_connection(&addr).await?;
+    let mut channel = setup_rabbitmq_connection(&addr).await?;
 
     while let Some(event) = rx.recv().await {
       let message = serde_json::to_vec(&event)?;
+      let routing_key = EventPublisher::type_name(&event);
 
-      let publish = channel
-        .basic_publish(
-          &exchange,
-          EventPublisher::type_name(&event),
-          BasicPublishOptions::default(),
-          &message,
-          BasicProperties::default(),
-        )
-        .await?
-        .await?;
+      let mut attempts = 3;
+      let mut backoff_delay = Duration::from_secs(1);
+      while attempts > 0 {
+        let result =
+          EventPublisher::publish_message(&channel, &exchange, routing_key, &message).await;
+        if let Err(e) = result {
+          attempts -= 1;
+          log::error!("Error publishing message: {}. Attempting to recreate the RMQ channel. Retries left: {}. Retrying in {} seconds.", e, attempts, backoff_delay.as_secs());
+          sleep(backoff_delay).await;
+          backoff_delay *= 2;
+          channel = setup_rabbitmq_connection(&addr).await?;
+        } else {
+          break;
+        }
+      }
 
-      if !publish.is_ack() {
+      if attempts == 0 {
         return Err(anyhow::Error::new(std::io::Error::new(
           std::io::ErrorKind::Other,
-          "Message was not acknowledged",
+          "Failed to publish message after retries",
         )));
       }
     }
+    Ok(())
+  }
+
+  async fn publish_message(
+    channel: &Channel,
+    exchange: &str,
+    routing_key: &str,
+    message: &[u8],
+  ) -> Result<()> {
+    let publish = channel
+      .basic_publish(
+        exchange,
+        routing_key,
+        BasicPublishOptions::default(),
+        message,
+        BasicProperties::default(),
+      )
+      .await?
+      .await?;
+
+    if !publish.is_ack() {
+      return Err(anyhow::Error::new(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        "Message was not acknowledged",
+      )));
+    }
+
     Ok(())
   }
 
