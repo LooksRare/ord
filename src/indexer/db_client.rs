@@ -9,6 +9,11 @@ use std::str::FromStr;
 use crate::api::InscriptionDetails;
 use crate::InscriptionId;
 
+pub enum EventType {
+  InscriptionCreated,
+  InscriptionTransferred,
+}
+
 #[derive(Debug, Clone)]
 pub struct Event {
   pub type_id: i16,
@@ -16,6 +21,16 @@ pub struct Event {
   pub inscription_id: String,
   pub location: Option<SatPoint>,
   pub old_location: Option<SatPoint>,
+}
+
+impl Event {
+  pub fn get_type(&self) -> EventType {
+    match self.type_id {
+      1 => EventType::InscriptionCreated,
+      2 => EventType::InscriptionTransferred,
+      _ => unreachable!(),
+    }
+  }
 }
 
 pub struct DbClient {

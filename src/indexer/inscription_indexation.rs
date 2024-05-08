@@ -5,59 +5,42 @@ use std::io::Cursor;
 
 use crate::api::BlockInfo;
 use crate::indexer::api_client::ApiClient;
-use crate::indexer::db_client::{DbClient, Event};
+use crate::indexer::db_client::{DbClient, Event, EventType};
 use crate::settings::Settings;
 
 pub struct InscriptionIndexation {
   settings: Settings,
-  ord_db_client: DbClient,
-  ord_api_client: ApiClient,
+  db: DbClient,
+  api: ApiClient,
 }
 
 impl InscriptionIndexation {
-  pub fn new(settings: &Settings, ord_db_client: DbClient, ord_api_client: ApiClient) -> Self {
+  pub fn new(settings: &Settings, db: DbClient, api: ApiClient) -> Self {
     Self {
       settings: settings.clone(),
-      ord_api_client,
-      ord_db_client,
+      db,
+      api,
     }
   }
 
   pub async fn sync_blocks(&self, block_height: &u32) -> Result<(), anyhow::Error> {
     log::info!("Blocks committed event for={block_height}");
 
-    let events = self
-      .ord_db_client
-      .fetch_events_by_block_height(block_height)
-      .await?;
-    let block_info = self.ord_api_client.fetch_block_info(block_height).await?;
+    let events = self.db.fetch_events_by_block_height(block_height).await?;
+    let block_info = self.api.fetch_block_info(block_height).await?;
+
     for event in events {
-      match event.type_id {
-        1 => {
-          if let Err(e) = self.process_inscription_created(&event, &block_info).await {
-            log::error!(
-              "Error processing inscription creation for event {:?}: {}",
-              event,
-              e
-            );
-          }
-        }
-        2 => {
-          if let Err(e) = self
-            .process_inscription_transferred(&event, &block_info)
-            .await
-          {
-            log::error!(
-              "Error processing inscription transferred for event {:?}: {}",
-              event,
-              e
-            );
-          }
-        }
-        _ => {
-          log::warn!("Unhandled event type: {}", event.type_id);
-        }
-      }
+      match event.get_type() {
+        EventType::InscriptionCreated => self
+          .process_inscription_created(&event, &block_info)
+          .await
+          .inspect_err(|e| log::error!("error with inscription_created {:?}: {e}", event)),
+
+        EventType::InscriptionTransferred => self
+          .process_inscription_transferred(&event, &block_info)
+          .await
+          .inspect_err(|e| log::error!("error with inscription_transferred {:?}: {e}", event)),
+      };
     }
 
     Ok(())
@@ -68,27 +51,22 @@ impl InscriptionIndexation {
     event: &Event,
     block_info: &BlockInfo,
   ) -> Result<(), anyhow::Error> {
-    let inscription_details = self
-      .ord_api_client
-      .fetch_inscription_details(event.inscription_id.clone())
-      .await?;
+    let inscription_id = event.inscription_id.clone();
+    let inscription = self.api.fetch_inscription_details(inscription_id).await?;
 
-    let metadata = self.try_and_extract_metadata(&inscription_details.metadata);
-
-    let inscription_id = self
-      .ord_db_client
-      .save_inscription(&inscription_details, metadata)
-      .await?;
+    let metadata = self.try_and_extract_metadata(&inscription.metadata);
+    let id = self.db.save_inscription(&inscription, metadata).await?;
 
     let mut to_location_details: Option<(String, u64)> = None;
+
     if let Some(location) = &event.location {
       to_location_details = self.process_location(location).await?;
     }
 
     self
-      .ord_db_client
+      .db
       .save_location(
-        inscription_id,
+        id,
         event.block_height,
         block_info.timestamp,
         event.location.as_ref().map(|loc| loc.outpoint.txid),
@@ -128,7 +106,7 @@ impl InscriptionIndexation {
     block_info: &BlockInfo,
   ) -> Result<(), anyhow::Error> {
     let inscription_id = self
-      .ord_db_client
+      .db
       .fetch_inscription_id_by_genesis_id(event.inscription_id.clone())
       .await?
       .ok_or_else(|| {
@@ -149,7 +127,7 @@ impl InscriptionIndexation {
     }
 
     self
-      .ord_db_client
+      .db
       .save_location(
         inscription_id,
         event.block_height,
@@ -176,7 +154,7 @@ impl InscriptionIndexation {
     &self,
     location: &SatPoint,
   ) -> Result<Option<(String, u64)>, anyhow::Error> {
-    let tx_details = self.ord_api_client.fetch_tx(location.outpoint.txid).await?;
+    let tx_details = self.api.fetch_tx(location.outpoint.txid).await?;
 
     let output = tx_details
       .transaction

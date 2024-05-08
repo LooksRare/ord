@@ -55,7 +55,7 @@ impl BlockConsumer {
         if let Some(msg) = consumer.next().await {
           match msg {
             Ok(d) => BlockConsumer::handle_delivery(d, &inscription_indexer).await?,
-            Err(e) => log::error!("error consuming message: {}", e),
+            Err(err) => log::error!("error consuming message: {err}"),
           }
         }
       }
@@ -72,7 +72,7 @@ impl BlockConsumer {
     match event {
       Ok(event) => {
         if let Err(err) = BlockConsumer::process_event(&event, indexer).await {
-          log::error!("failed to process event: {}", err);
+          log::error!("failed to process event: {err}");
           delivery.reject(reject).await
         } else {
           delivery.ack(BasicAckOptions::default()).await
@@ -80,7 +80,7 @@ impl BlockConsumer {
       }
 
       Err(e) => {
-        log::error!("failed to deserialize event, rejecting: {}", e);
+        log::error!("failed to deserialize event: {:?}", e);
         delivery.reject(reject).await
       }
     }
