@@ -1,6 +1,3 @@
-use std::process;
-use std::sync::Arc;
-
 use anyhow::Context;
 use bitcoin::secp256k1::rand::distributions::Alphanumeric;
 use chrono::Utc;
@@ -9,6 +6,7 @@ use futures::StreamExt;
 use lapin::{options::*, types::FieldTable};
 use rand::distributions::DistString;
 use sqlx::postgres::PgPoolOptions;
+use std::sync::Arc;
 use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
 use urlencoding::encode;
@@ -56,12 +54,13 @@ impl EventConsumer {
         .database_url
         .as_deref()
         .context("db url must be defined")?;
+
       log::info!(
-        "Connecting to database at {}",
+        "connecting to database at {}",
         EventConsumer::mask_password_in_url(database_url)
       );
-      let encoded_database_url = EventConsumer::encode_password_in_url(database_url);
 
+      let encoded_database_url = EventConsumer::encode_password_in_url(database_url);
       let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect(encoded_database_url.as_ref())
@@ -70,7 +69,7 @@ impl EventConsumer {
       let ord_db_client = Arc::new(OrdDbClient::new(shared_pool.clone()));
 
       let api_url = self.ord_api_url.context("api url must be defined")?;
-      let ord_api_c = OrdApiClient::new(api_url.clone()).expect("api client must exist");
+      let ord_api_c = OrdApiClient::new(api_url).expect("api client must exist");
       let ord_api_client = Arc::new(ord_api_c);
 
       let ord_indexation = Arc::new(OrdIndexation::new(
@@ -108,10 +107,7 @@ impl EventConsumer {
           blocks_shutdown_rx,
         )
         .await
-        .map_err(|e| {
-          log::error!("Error consuming blocks queue: {}", e);
-          process::exit(1);
-        })
+        .expect("error consuming blocks queue")
       });
 
       let inscriptions_consumer_handle = tokio::spawn(async move {
@@ -123,10 +119,7 @@ impl EventConsumer {
           inscriptions_shutdown_rx,
         )
         .await
-        .map_err(|e| {
-          log::error!("Error consuming inscriptions queue: {}", e);
-          process::exit(1);
-        })
+        .expect("error consuming inscriptions queue")
       });
 
       let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;

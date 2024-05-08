@@ -11,7 +11,7 @@ use crate::InscriptionId;
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct Event {
   pub type_id: i16,
-  pub block_height: i64,
+  pub block_height: i32,
   pub inscription_id: String,
   pub location: Option<SatPoint>,
   pub old_location: Option<SatPoint>,
@@ -36,7 +36,7 @@ impl OrdDbClient {
       FROM event WHERE block_height = $1
       ORDER BY type_id ASC, id ASC
       "#,
-      block_height as i64,
+      i32::try_from(block_height).expect("block_height should fit in pg integer"),
     )
     .map(|r| Event {
       type_id: r.type_id,
@@ -160,16 +160,23 @@ impl OrdDbClient {
       inscription_details.id.to_string(),
       inscription_details.number,
       inscription_details.content_type.as_deref(),
-      inscription_details.content_length.map(|n| n as i32),
+      inscription_details
+        .content_length
+        .map(|n| i32::try_from(n).expect("content_length should fit in pg integer")),
       metadata,
-      inscription_details.genesis_block_height as i32,
+      i32::try_from(inscription_details.genesis_block_height)
+        .expect("genesis_block_height should fit in pg integer"),
       inscription_details.genesis_block_time,
-      inscription_details.sat_number.map(|n| n as i64),
+      inscription_details
+        .sat_number
+        .map(|n| i64::try_from(n).expect("sat_number should fit in pg bigint")),
       inscription_details.sat_rarity.map(|r| r as i32),
-      inscription_details.sat_block_height.map(|n| n as i32),
+      inscription_details
+        .sat_block_height
+        .map(|n| i32::try_from(n).expect("sat_block_height should fit in pg integer")),
       inscription_details.sat_block_time,
-      inscription_details.fee as i64,
-      inscription_details.charms as i16,
+      i64::try_from(inscription_details.fee).expect("fee should fit in pg bigint"),
+      i16::try_from(inscription_details.charms).expect("charts should fit in pg smallint"),
       Json(&inscription_details.children).encode_to_string(),
       Json(&inscription_details.parents).encode_to_string()
     )
@@ -181,7 +188,7 @@ impl OrdDbClient {
   pub async fn save_location(
     &self,
     id: i32,
-    block_height: i64,
+    block_height: i32,
     block_time: u64,
     tx_id: Option<Txid>,
     to_address: Option<String>,
@@ -211,8 +218,7 @@ impl OrdDbClient {
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
       WHERE NOT EXISTS (
         SELECT 1 FROM location
-        WHERE
-            inscription_id = $1
+        WHERE inscription_id = $1
           AND block_height = $2
           AND block_time = $3
           AND tx_id = $4
@@ -226,16 +232,16 @@ impl OrdDbClient {
       )
       "#,
       id,
-      block_height as i64,
-      block_time as i64,
+      block_height,
+      i64::try_from(block_time).expect("block_time should fit in pg bigint"),
       tx_id.map(|n| n.to_string()),
       to_address,
       to_outpoint.map(|n| n.to_string()),
-      to_offset.map(|n| n as i64),
+      to_offset.map(|n| i64::try_from(n).expect("to_offset should fit in pg bigint")),
       from_address,
       from_outpoint.map(|n| n.to_string()),
-      from_offset.map(|n| n as i64),
-      value.map(|n| n as i64),
+      from_offset.map(|n| i64::try_from(n).expect("from_offset should fit in pg bigint")),
+      value.map(|n| i64::try_from(n).expect("value should fit in pg bigint")),
     )
     .execute(&*self.pool)
     .await?;
