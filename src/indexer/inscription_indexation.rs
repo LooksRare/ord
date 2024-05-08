@@ -7,22 +7,21 @@ use serde_json::Value;
 use ordinals::SatPoint;
 
 use crate::api::BlockInfo;
-use crate::ord_api_client::OrdApiClient;
-use crate::ord_db_client::{Event, OrdDbClient};
+use crate::indexer::api_client::ApiClient;
+use crate::indexer::db_client::{DbClient, Event};
 use crate::settings::Settings;
-use crate::InscriptionId;
 
-pub struct OrdIndexation {
+pub struct InscriptionIndexation {
   settings: Settings,
-  ord_db_client: Arc<OrdDbClient>,
-  ord_api_client: Arc<OrdApiClient>,
+  ord_db_client: Arc<DbClient>,
+  ord_api_client: Arc<ApiClient>,
 }
 
-impl OrdIndexation {
+impl InscriptionIndexation {
   pub fn new(
     settings: &Settings,
-    ord_db_client: Arc<OrdDbClient>,
-    ord_api_client: Arc<OrdApiClient>,
+    ord_db_client: Arc<DbClient>,
+    ord_api_client: Arc<ApiClient>,
   ) -> Self {
     Self {
       settings: settings.clone(),
@@ -31,41 +30,39 @@ impl OrdIndexation {
     }
   }
 
-  pub async fn sync_blocks(&self, from_height: &u32, to_height: &u32) -> Result<(), anyhow::Error> {
-    log::info!("Blocks committed event from={from_height} (excluded), to={to_height} (included)");
+  pub async fn sync_blocks(&self, block_height: &u32) -> Result<(), anyhow::Error> {
+    log::info!("Blocks committed event for={block_height}");
 
-    for block_height in *from_height + 1..=*to_height {
-      let events = self
-        .ord_db_client
-        .fetch_events_by_block_height(block_height)
-        .await?;
-      let block_info = self.ord_api_client.fetch_block_info(block_height).await?;
-      for event in events {
-        match event.type_id {
-          1 => {
-            if let Err(e) = self.process_inscription_created(&event, &block_info).await {
-              log::error!(
-                "Error processing inscription creation for event {:?}: {}",
-                event,
-                e
-              );
-            }
+    let events = self
+      .ord_db_client
+      .fetch_events_by_block_height(block_height)
+      .await?;
+    let block_info = self.ord_api_client.fetch_block_info(block_height).await?;
+    for event in events {
+      match event.type_id {
+        1 => {
+          if let Err(e) = self.process_inscription_created(&event, &block_info).await {
+            log::error!(
+              "Error processing inscription creation for event {:?}: {}",
+              event,
+              e
+            );
           }
-          2 => {
-            if let Err(e) = self
-              .process_inscription_transferred(&event, &block_info)
-              .await
-            {
-              log::error!(
-                "Error processing inscription transferred for event {:?}: {}",
-                event,
-                e
-              );
-            }
+        }
+        2 => {
+          if let Err(e) = self
+            .process_inscription_transferred(&event, &block_info)
+            .await
+          {
+            log::error!(
+              "Error processing inscription transferred for event {:?}: {}",
+              event,
+              e
+            );
           }
-          _ => {
-            log::warn!("Unhandled event type: {}", event.type_id);
-          }
+        }
+        _ => {
+          log::warn!("Unhandled event type: {}", event.type_id);
         }
       }
     }
@@ -209,32 +206,5 @@ impl OrdIndexation {
       Some(addr) => Ok(Some((addr, output.unwrap().value))),
       None => Ok(None),
     }
-  }
-
-  pub async fn save_inscription_created(
-    &self,
-    block_height: &u32,
-    inscription_id: &InscriptionId,
-    location: &Option<SatPoint>,
-  ) -> Result<(), anyhow::Error> {
-    self
-      .ord_db_client
-      .save_inscription_created(block_height, inscription_id, location)
-      .await?;
-    Ok(())
-  }
-
-  pub async fn save_inscription_transferred(
-    &self,
-    block_height: &u32,
-    inscription_id: &InscriptionId,
-    new_location: &SatPoint,
-    old_location: &SatPoint,
-  ) -> Result<(), anyhow::Error> {
-    self
-      .ord_db_client
-      .save_inscription_transferred(block_height, inscription_id, new_location, old_location)
-      .await?;
-    Ok(())
   }
 }

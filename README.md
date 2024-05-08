@@ -24,26 +24,35 @@ ordinal degenerates.
 LooksRare Ordinals
 ------------------
 
-**Setup**
+**Database & Sqlx Setup**
 
 1. Setup the local `ordinals` database
 `$ psql -h localhost -d postgres -q -f db/config.sql`
 
-2. Run the migrations. 
-`cargo sqlx database setup --database-url $DATABASE_URL --source db/migrations/`
+2. Run the database migrations. 
+`$ cargo sqlx migrate run --database-url $DATABASE_URL --source db/migrations/`
 
-Note database url is likely to be _postgres://backend:looks-backend@localhost:5432/ordinals"_
+3. Clone `.env.example` into `.env` for compile time checked sql queries
 
-**Examples running via command line:**
+4. After changing queries you can run
+`$ cargo sqlx prepare --database-url $DATABASE_URL`
 
-To run ord event server
+Note `$DATABASE_URL` is likely to be _"postgres://backend:looks-backend@localhost:5432/ordinals"_.
+
+**Running via command line:**
+
+To run ord event server (signet):
 ```
-ord --bitcoin-rpc-url "http://localhost:18332" --bitcoin-rpc-username user --bitcoin-rpc-password password --commit-interval 10 --rabbitmq-url localhost --rabbitmq-password s3cr3t --rabbitmq-username indexer --rabbitmq-exchange ord-tx --chain testnet --data-dir ./index-data event-server --http-port 8080
+RUST_LOG=info  cargo run --package ord --bin ord -- --bitcoin-rpc-url "http://localhost:38332" --bitcoin-rpc-username user --bitcoin-rpc-password password --commit-interval 10 --rabbitmq-url amqp://indexer:s3cr3t@localhost --rabbitmq-exchange ord-tx --chain signet --data-dir ./index-data event-server --http-port 8080
 ```
 
-To run ord event indexer
+To run ord event-consumer "inscription" indexer:
 ```
-ord --rabbitmq-url localhost --rabbitmq-password s3cr3t --rabbitmq-username indexer event-consumer --blocks-queue btc-blocks-q --inscriptions-queue btc-inscription-q --database-url postgresql://backend:looks-backend@localhost:55432/ordinals --ord-api-url http://localhost:8080
+RUST_LOG=info cargo run --package ord --bin ord -- --rabbitmq-url amqp://indexer:s3cr3t@localhost event-consumer --inscriptions-queue btc-inscription-q --database-url postgresql://backend:looks-backend@localhost:5432/ordinals
+```
+
+```
+RUST_LOG=info cargo run --package ord --bin ord -- --rabbitmq-url amqp://indexer:s3cr3t@localhost block-consumer --blocks-queue btc-blocks-q --database-url postgresql://backend:looks-backend@localhost:5432/ordinals --ord-api-url http://localhost:8080
 ```
 
 Donate

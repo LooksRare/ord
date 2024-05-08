@@ -1,11 +1,10 @@
 use anyhow::{Context, Result};
-use lapin::options::ConfirmSelectOptions;
 use lapin::{options::BasicPublishOptions, BasicProperties};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 
-use crate::connect_rmq::connect_to_rabbitmq;
 use crate::index::event::Event;
+use crate::indexer::rmq_con::setup_rabbitmq_connection;
 use crate::settings::Settings;
 use crate::shutdown_process;
 
@@ -47,13 +46,7 @@ impl EventPublisher {
     exchange: String,
     mut rx: mpsc::Receiver<Event>,
   ) -> Result<()> {
-    let conn = connect_to_rabbitmq(&addr).await?;
-
-    let channel = conn.create_channel().await?;
-
-    channel
-      .confirm_select(ConfirmSelectOptions::default())
-      .await?;
+    let channel = setup_rabbitmq_connection(&addr).await?;
 
     while let Some(event) = rx.recv().await {
       let message = serde_json::to_vec(&event)?;

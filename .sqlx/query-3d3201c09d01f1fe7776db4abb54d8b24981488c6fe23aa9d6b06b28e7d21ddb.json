@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n      INSERT INTO inscription (\n          genesis_id\n        , number\n        , content_type\n        , content_length\n        , metadata\n        , genesis_block_height\n        , genesis_block_time\n        , sat_number\n        , sat_rarity\n        , sat_block_height\n        , sat_block_time\n        , fee\n        , charms\n        , children\n        , parents\n      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)\n      ON CONFLICT (genesis_id) DO UPDATE SET\n          number = EXCLUDED.number\n        , content_type = EXCLUDED.content_type\n        , content_length = COALESCE(EXCLUDED.content_length, inscription.content_length)\n        , metadata = COALESCE(EXCLUDED.metadata, inscription.metadata)\n        , genesis_block_height = EXCLUDED.genesis_block_height\n        , genesis_block_time = EXCLUDED.genesis_block_time\n        , sat_number = COALESCE(EXCLUDED.sat_number, inscription.sat_number)\n        , sat_rarity = COALESCE(EXCLUDED.sat_rarity, inscription.sat_rarity)\n        , sat_block_height = COALESCE(EXCLUDED.sat_block_height, inscription.sat_block_height)\n        , sat_block_time = COALESCE(EXCLUDED.sat_block_time, inscription.sat_block_time)\n        , fee = EXCLUDED.fee\n        , charms = EXCLUDED.charms\n        , children = COALESCE(EXCLUDED.children, inscription.children)\n        , parents = COALESCE(EXCLUDED.parents, inscription.parents)\n      RETURNING id\n      ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4",
+        "Varchar",
+        "Int4",
+        "Text",
+        "Int4",
+        "Int8",
+        "Int8",
+        "Int4",
+        "Int4",
+        "Int8",
+        "Int8",
+        "Int2",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3d3201c09d01f1fe7776db4abb54d8b24981488c6fe23aa9d6b06b28e7d21ddb"
+}

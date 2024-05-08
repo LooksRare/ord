@@ -7,18 +7,16 @@ use tokio::time::sleep;
 
 use crate::api::{BlockInfo, InscriptionDetails, Transaction};
 
-pub struct OrdApiClient {
+pub struct ApiClient {
   ord_api_url: String,
   client: Client,
 }
 
-impl OrdApiClient {
+impl ApiClient {
   pub fn new(ord_api_url: String) -> anyhow::Result<Self, anyhow::Error> {
-    let client = Client::builder()
-      .timeout(std::time::Duration::from_secs(30))
-      .build()?;
+    let client = Client::builder().timeout(Duration::from_secs(30)).build()?;
 
-    Ok(OrdApiClient {
+    Ok(ApiClient {
       ord_api_url,
       client,
     })
@@ -111,7 +109,7 @@ impl OrdApiClient {
     self.execute_with_retries(request_builder, 3).await
   }
 
-  pub async fn fetch_block_info(&self, block_height: u32) -> Result<BlockInfo, anyhow::Error> {
+  pub async fn fetch_block_info(&self, block_height: &u32) -> Result<BlockInfo, anyhow::Error> {
     let request_builder = self
       .client
       .get(format!("{}/r/blockinfo/{}", self.ord_api_url, block_height))

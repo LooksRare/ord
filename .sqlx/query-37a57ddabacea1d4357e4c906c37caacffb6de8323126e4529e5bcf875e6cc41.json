@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n      SELECT type_id, block_height, inscription_id, location, old_location\n      FROM event WHERE block_height = $1\n      ORDER BY type_id ASC, id ASC\n      ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "type_id",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 1,
+        "name": "block_height",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "inscription_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "location",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "old_location",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "37a57ddabacea1d4357e4c906c37caacffb6de8323126e4529e5bcf875e6cc41"
+}
