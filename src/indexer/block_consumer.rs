@@ -4,6 +4,7 @@ use std::sync::Arc;
 use anyhow::Context;
 use clap::Parser;
 use futures::StreamExt;
+use lapin::types::AMQPValue;
 use lapin::{options::*, types::FieldTable};
 use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
@@ -123,28 +124,41 @@ impl BlockConsumer {
   async fn handle_delivery(
     delivery: lapin::message::Delivery,
     inscription_indexation: &Arc<InscriptionIndexation>,
-  ) -> Result<(), anyhow::Error> {
+  ) -> Result<(), lapin::Error> {
     let event: Result<Event, _> = serde_json::from_slice(&delivery.data);
-    match event {
-      Ok(event) => {
-        if let Err(err) = BlockConsumer::process_event(event, inscription_indexation).await {
-          log::error!("Failed to process event: {}", err);
-          delivery
-            .reject(BasicRejectOptions { requeue: false })
-            .await?;
-        } else {
-          delivery.ack(BasicAckOptions::default()).await?;
-        }
-      }
-      Err(e) => {
-        log::error!("Failed to deserialize event, rejecting: {}", e);
-        delivery
-          .reject(BasicRejectOptions { requeue: false })
-          .await?;
+
+    let mut delivery_count = 0;
+    if let Some(headers) = delivery.properties.headers() {
+      if let Some(AMQPValue::LongLongInt(count)) = headers.inner().get("x-delivery-count") {
+        delivery_count = *count;
       }
     }
 
-    Ok(())
+    match event {
+      Ok(event) => {
+        if let Err(err) = BlockConsumer::process_event(event, inscription_indexation).await {
+          if delivery_count >= 3 {
+            log::error!("Failed to process event: {}, rejecting", err);
+            delivery.reject(BasicRejectOptions { requeue: false }).await
+          } else {
+            log::warn!("Failed to process event: {}, requeuing", err);
+            delivery
+              .nack(BasicNackOptions {
+                multiple: false,
+                requeue: true,
+              })
+              .await
+          }
+        } else {
+          delivery.ack(BasicAckOptions::default()).await
+        }
+      }
+
+      Err(e) => {
+        log::error!("Failed to deserialize event, rejecting: {}", e);
+        delivery.reject(BasicRejectOptions { requeue: false }).await
+      }
+    }
   }
 
   async fn process_event(
