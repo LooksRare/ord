@@ -54,7 +54,7 @@ impl EventPublisher {
       let message = serde_json::to_vec(&event)?;
       let routing_key = EventPublisher::type_name(&event);
 
-      let mut attempts = 3;
+      let mut attempts = 10;
       let mut backoff_delay = Duration::from_secs(1);
       while attempts > 0 {
         let result =
