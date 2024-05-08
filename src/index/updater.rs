@@ -744,19 +744,21 @@ impl<'index> Updater<'index> {
 
     Reorg::update_savepoints(self.index, self.height)?;
 
-    if let Some(sender) = self.index.event_sender.as_ref() {
-      if let Ok(uncommitted) = u32::try_from(uncommitted) {
-        for current_height in (self.height - uncommitted)..self.height {
-          sender.blocking_send(Event::BlockCommitted {
-            height: current_height,
-          })?;
+    if self.height >= self.index.first_inscription_height {
+      if let Some(sender) = self.index.event_sender.as_ref() {
+        if let Ok(uncommitted) = u32::try_from(uncommitted) {
+          for current_height in (self.height - uncommitted)..self.height {
+            sender.blocking_send(Event::BlockCommitted {
+              height: current_height,
+            })?;
+          }
+        } else {
+          log::error!(
+            "Failed to publish block range from_height: {}, uncommitted: {}",
+            self.height,
+            uncommitted
+          );
         }
-      } else {
-        log::error!(
-          "Failed to publish block range from_height: {}, uncommitted: {}",
-          self.height,
-          uncommitted
-        );
       }
     }
 
