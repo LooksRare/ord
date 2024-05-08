@@ -64,7 +64,12 @@ impl EventPublisher {
           log::error!("Error publishing message: {}. Attempting to recreate the RMQ channel. Retries left: {}. Retrying in {} seconds.", e, attempts, backoff_delay.as_secs());
           sleep(backoff_delay).await;
           backoff_delay *= 2;
-          channel = setup_rabbitmq_connection(&addr).await?;
+          channel = setup_rabbitmq_connection(&addr)
+            .await
+            .unwrap_or_else(|conn_err| {
+              log::error!("Failed to recreate RabbitMQ channel: {}", conn_err);
+              channel
+            });
         } else {
           break;
         }
