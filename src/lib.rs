@@ -104,8 +104,6 @@ mod blocktime;
 pub mod chain;
 pub mod decimal;
 mod deserialize_from_str;
-mod event_consumer;
-mod event_publisher;
 mod fee_rate;
 pub mod index;
 mod inscriptions;
@@ -113,11 +111,6 @@ mod into_usize;
 mod macros;
 mod object;
 pub mod options;
-pub mod ord_api_client;
-
-pub mod connect_rmq;
-pub mod ord_db_client;
-mod ord_indexation;
 pub mod outgoing;
 mod re;
 mod representation;
@@ -127,6 +120,16 @@ pub mod subcommand;
 mod tally;
 pub mod templates;
 pub mod wallet;
+pub mod indexer {
+  pub mod api_client;
+  pub mod block_consumer;
+  pub mod db_client;
+  pub mod db_con;
+  pub mod event_consumer;
+  pub mod event_publisher;
+  pub mod inscription_indexation;
+  pub mod rmq_con;
+}
 
 type Result<T = (), E = Error> = std::result::Result<T, E>;
 

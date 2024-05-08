@@ -17,18 +17,18 @@ pub struct Event {
   pub old_location: Option<SatPoint>,
 }
 
-pub struct OrdDbClient {
+pub struct DbClient {
   pool: Arc<PgPool>,
 }
 
-impl OrdDbClient {
+impl DbClient {
   pub fn new(pool: Arc<PgPool>) -> Self {
     Self { pool }
   }
 
   pub async fn fetch_events_by_block_height(
     &self,
-    block_height: u32,
+    block_height: &u32,
   ) -> Result<Vec<Event>, sqlx::Error> {
     sqlx::query!(
       r#"

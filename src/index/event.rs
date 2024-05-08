@@ -42,7 +42,6 @@ pub enum Event {
     txid: Txid,
   },
   BlockCommitted {
-    from_height: u32,
-    to_height: u32,
+    height: u32,
   },
 }
