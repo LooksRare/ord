@@ -66,28 +66,42 @@ impl BlockConsumer {
     })
   }
 
+  /// Handle the persistence of incoming queue "block" messages.
+  ///
+  /// Re-enqueues the message up to `max_delivery` times for processing failures.
+  /// Bubbles up the `lapin::Error` only if the ack/nack/reject itself fails.
   async fn handle_delivery(
     delivery: Delivery,
     indexer: &InscriptionIndexation,
   ) -> Result<(), lapin::Error> {
+    let max_delivery = 3;
     let reject = BasicRejectOptions { requeue: false };
-    let event: Result<Event, _> = serde_json::from_slice(&delivery.data);
+    let requeue = BasicNackOptions {
+      multiple: false,
+      requeue: true,
+    };
 
-    match event {
-      Ok(event) => {
-        if let Err(err) = BlockConsumer::process_event(&event, indexer).await {
-          log::error!("failed to process event: {err}");
-          delivery.reject(reject).await
-        } else {
-          delivery.ack(BasicAckOptions::default()).await
-        }
-      }
+    let delivery_count = delivery
+      .properties
+      .headers()
+      .as_ref()
+      .and_then(|h| h.inner().get("x-delivery-count")?.as_short_uint())
+      .unwrap_or(0);
 
-      Err(e) => {
-        log::error!("failed to deserialize event: {:?}", e);
-        delivery.reject(reject).await
-      }
+    if delivery_count > max_delivery {
+      delivery.reject(reject).await?
     }
+
+    let event = serde_json::from_slice::<Event>(&delivery.data).context("should deserialize evt");
+
+    if let Ok(ref e) = event {
+      if BlockConsumer::process_event(e, indexer).await.is_ok() {
+        delivery.ack(BasicAckOptions::default()).await?
+      };
+    };
+
+    log::error!("failed event requeued {:?}", event);
+    delivery.nack(requeue).await
   }
 
   async fn process_event(

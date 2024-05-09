@@ -54,7 +54,7 @@ impl InscriptionIndexation {
     &self,
     event: &Event,
     block_info: &BlockInfo,
-  ) -> Result<(), anyhow::Error> {
+  ) -> anyhow::Result<()> {
     let inscription = self
       .api
       .fetch_inscription_details(&event.inscription_id)
