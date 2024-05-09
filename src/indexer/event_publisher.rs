@@ -1,6 +1,12 @@
+<<<<<<< HEAD
 use anyhow::{anyhow, Context, Result};
 use lapin::{options::BasicPublishOptions, BasicProperties, Channel};
 use std::time::Duration;
+=======
+use anyhow::{Context, Result};
+use lapin::options::BasicQosOptions;
+use lapin::{options::BasicPublishOptions, BasicProperties};
+>>>>>>> ff2661c2d45defd1d3ce9df0400ebc2a266ff010
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 use tokio::time::sleep;
@@ -53,7 +59,12 @@ impl EventPublisher {
     exchange: String,
     mut rx: mpsc::Receiver<Event>,
   ) -> Result<()> {
-    let mut channel = setup_rabbitmq_connection(&addr).await?;
+    let channel = setup_rabbitmq_connection(&addr).await?;
+    
+    channel
+      .basic_qos(2, BasicQosOptions::default())
+      .await
+      .context("failed to set basic qos")?;
 
     while let Some(event) = rx.recv().await {
       let message = serde_json::to_vec(&event)?;

@@ -37,6 +37,10 @@ impl BlockConsumer {
       let addr = settings.rabbitmq_addr().context("rmq url is required")?;
       let queue_name = self.blocks_queue.context("rmq queue is required")?;
       let channel = setup_rabbitmq_connection(addr).await?;
+      channel
+        .basic_qos(2, BasicQosOptions::default())
+        .await
+        .context("Failed to set basic_qos")?;
 
       let inscription_indexer = InscriptionIndexation::new(settings, db, api_client);
 
