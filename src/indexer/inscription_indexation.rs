@@ -75,6 +75,7 @@ impl InscriptionIndexation {
         event.block_height,
         block_info.timestamp,
         location.map(|loc| loc.outpoint.txid),
+        to_location.as_ref().and_then(|d| d.2),
         to_location.as_ref().map(|d| d.0.clone()),
         location.map(|loc| loc.outpoint),
         location.map(|loc| loc.offset),
@@ -142,6 +143,7 @@ impl InscriptionIndexation {
         event.block_height,
         block_info.timestamp,
         location.map(|loc| loc.outpoint.txid),
+        to_location.as_ref().and_then(|d| d.2),
         to_location.as_ref().map(|d| d.0.clone()),
         location.map(|loc| loc.outpoint),
         location.map(|loc| loc.offset),
@@ -154,7 +156,10 @@ impl InscriptionIndexation {
       .map_err(|err| anyhow!("error saving inscription_transferred location: {err}"))
   }
 
-  async fn process_location(&self, location: &SatPoint) -> Result<(String, u64), anyhow::Error> {
+  async fn process_location(
+    &self,
+    location: &SatPoint,
+  ) -> Result<(String, u64, Option<usize>), anyhow::Error> {
     let tx_details = self.api.fetch_tx(location.outpoint.txid).await?;
 
     let output = tx_details
@@ -170,6 +175,6 @@ impl InscriptionIndexation {
       .address_from_script(&output.script_pubkey)?
       .to_string();
 
-    Ok((address, output.value))
+    Ok((address, output.value, tx_details.tx_index))
   }
 }

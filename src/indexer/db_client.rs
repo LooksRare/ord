@@ -216,6 +216,7 @@ impl DbClient {
     block_height: i32,
     block_time: u64,
     tx_id: Option<Txid>,
+    tx_index: Option<usize>,
     to_address: Option<String>,
     to_outpoint: Option<OutPoint>,
     to_offset: Option<u64>,
@@ -231,6 +232,7 @@ impl DbClient {
         , block_height
         , block_time
         , tx_id
+        , tx_index
         , to_address
         , cur_output
         , cur_offset
@@ -238,28 +240,19 @@ impl DbClient {
         , prev_output
         , prev_offset
         , value
-      )
-      SELECT
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
-      WHERE NOT EXISTS (
-        SELECT 1 FROM location
-        WHERE inscription_id = $1
-          AND block_height = $2
-          AND block_time = $3
-          AND tx_id = $4
-          AND to_address = $5
-          AND cur_output = $6
-          AND cur_offset = $7
-          AND from_address = $8
-          AND prev_output = $9
-          AND prev_offset = $10
-          AND value = $11
-      )
+            )
+      VALUES
+        (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+        )
+      ON CONFLICT (inscription_id, tx_id, tx_index)
+      DO NOTHING
       "#,
       id,
       block_height,
       i64::try_from(block_time).expect("block_time should fit in pg bigint"),
       tx_id.map(|n| n.to_string()),
+      tx_index.map(|tx_index| i32::try_from(tx_index).expect("tx_index should fit in pg integer")),
       to_address,
       to_outpoint.map(|n| n.to_string()),
       to_offset.map(|n| i64::try_from(n).expect("to_offset should fit in pg bigint")),

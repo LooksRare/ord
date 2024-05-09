@@ -5,7 +5,8 @@ use bitcoin::Txid;
 use reqwest::{Client, RequestBuilder};
 use tokio::time::sleep;
 
-use crate::api::{BlockInfo, InscriptionDetails, Transaction};
+use crate::api::{BlockInfo, InscriptionDetails};
+use crate::templates::transaction::TransactionDetails;
 
 pub struct ApiClient {
   ord_api_url: String,
@@ -100,10 +101,10 @@ impl ApiClient {
     self.execute_with_retries(request_builder, 3).await
   }
 
-  pub async fn fetch_tx(&self, tx_id: Txid) -> Result<Transaction, anyhow::Error> {
+  pub async fn fetch_tx(&self, tx_id: Txid) -> Result<TransactionDetails, anyhow::Error> {
     let request_builder = self
       .client
-      .get(format!("{}/tx/{}", self.ord_api_url, tx_id))
+      .get(format!("{}/tx/{}/details", self.ord_api_url, tx_id))
       .header("Accept", "application/json");
 
     self.execute_with_retries(request_builder, 3).await
