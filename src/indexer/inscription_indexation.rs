@@ -45,7 +45,7 @@ impl InscriptionIndexation {
       }
     }
 
-    log::info!("Blocks committed event for={block_height}");
+    log::info!("Block {block_height} consumed");
 
     Ok(())
   }

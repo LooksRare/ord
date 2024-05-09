@@ -41,6 +41,7 @@ use {
 };
 
 use crate::api::InscriptionDetails;
+use crate::templates::transaction::TransactionDetails;
 
 mod accept_encoding;
 mod accept_json;
@@ -267,6 +268,7 @@ impl Server {
         .route("/static/*path", get(Self::static_asset))
         .route("/status", get(Self::status))
         .route("/tx/:txid", get(Self::transaction))
+        .route("/tx/:txid/details", get(Self::transaction_details))
         .route("/update", get(Self::update))
         .fallback(Self::fallback)
         .layer(Extension(index))
@@ -916,6 +918,28 @@ impl Server {
         .page(server_config)
         .into_response()
       })
+    })
+  }
+
+  async fn transaction_details(
+    Extension(server_config): Extension<Arc<ServerConfig>>,
+    Extension(index): Extension<Arc<Index>>,
+    Path(txid): Path<Txid>,
+    AcceptJson(_): AcceptJson,
+  ) -> ServerResult {
+    task::block_in_place(|| {
+      let (transaction, tx_index) = index
+        .get_transaction_details(txid)?
+        .ok_or_not_found(|| format!("transaction {txid}"))?;
+
+      Ok(
+        Json(TransactionDetails {
+          chain: server_config.chain,
+          transaction,
+          tx_index,
+        })
+        .into_response(),
+      )
     })
   }
 
