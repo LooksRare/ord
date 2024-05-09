@@ -9,13 +9,28 @@ use std::str::FromStr;
 use crate::api::InscriptionDetails;
 use crate::InscriptionId;
 
-#[derive(Debug, Clone, sqlx::FromRow)]
+pub enum EventType {
+  InscriptionCreated,
+  InscriptionTransferred,
+}
+
+#[derive(Debug, Clone)]
 pub struct Event {
   pub type_id: i16,
   pub block_height: i32,
   pub inscription_id: String,
   pub location: Option<SatPoint>,
   pub old_location: Option<SatPoint>,
+}
+
+impl Event {
+  pub fn get_type(&self) -> EventType {
+    match self.type_id {
+      1 => EventType::InscriptionCreated,
+      2 => EventType::InscriptionTransferred,
+      _ => unreachable!(),
+    }
+  }
 }
 
 pub struct DbClient {
@@ -115,7 +130,7 @@ impl DbClient {
 
   pub async fn fetch_inscription_id_by_genesis_id(
     &self,
-    genesis_id: String,
+    genesis_id: &String,
   ) -> Result<Option<i32>, sqlx::Error> {
     sqlx::query!(
       r#"SELECT id FROM inscription WHERE genesis_id = $1"#,
