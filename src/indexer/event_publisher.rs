@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use lapin::options::BasicQosOptions;
 use lapin::{options::BasicPublishOptions, BasicProperties};
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
@@ -47,6 +48,10 @@ impl EventPublisher {
     mut rx: mpsc::Receiver<Event>,
   ) -> Result<()> {
     let channel = setup_rabbitmq_connection(&addr).await?;
+    channel
+      .basic_qos(2, BasicQosOptions::default())
+      .await
+      .context("Failed to set basic_qos")?;
 
     while let Some(event) = rx.recv().await {
       let message = serde_json::to_vec(&event)?;

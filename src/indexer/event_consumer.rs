@@ -28,6 +28,10 @@ impl EventConsumer {
       let addr = settings.rabbitmq_addr().context("rmq url is required")?;
       let queue_name = self.inscriptions_queue.context("rmq queue is required")?;
       let channel = setup_rabbitmq_connection(addr).await?;
+      channel
+        .basic_qos(2, BasicQosOptions::default())
+        .await
+        .context("Failed to set basic_qos")?;
 
       let mut consumer = channel
         .basic_consume(
