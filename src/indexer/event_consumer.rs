@@ -1,12 +1,14 @@
 use anyhow::Context;
 use clap::Parser;
 use futures::StreamExt;
-use lapin::{message::Delivery, options::*, types::FieldTable};
+use lapin::{message::Delivery, options::*, types::FieldTable, Channel};
 use tokio::runtime::Runtime;
 
 use crate::index::event::Event;
 use crate::indexer::db_client::DbClient;
-use crate::indexer::rmq_con::{generate_consumer_tag, setup_rabbitmq_connection};
+use crate::indexer::rmq_con::{
+  generate_consumer_tag, republish_to_queue, setup_rabbitmq_connection,
+};
 use crate::settings::Settings;
 use crate::subcommand::SubcommandResult;
 
@@ -47,7 +49,7 @@ impl EventConsumer {
       loop {
         if let Some(msg) = consumer.next().await {
           match msg {
-            Ok(d) => EventConsumer::handle_delivery(d, &db).await?,
+            Ok(d) => EventConsumer::handle_delivery(&channel, d, &db).await?,
             Err(e) => log::error!("error consuming message: {}", e),
           }
         }
@@ -58,14 +60,14 @@ impl EventConsumer {
   /// Handle the persistence of incoming queue "event" messages.
   ///
   /// Re-enqueues the message up to `max_delivery` times for processing failures.
-  /// Bubbles up the `lapin::Error` only if the ack/nack/reject itself fails.
-  async fn handle_delivery(delivery: Delivery, db: &DbClient) -> Result<(), lapin::Error> {
+  /// Bubbles up the `lapin::Error` only if the ack/reject itself fails.
+  async fn handle_delivery(
+    channel: &Channel,
+    delivery: Delivery,
+    db: &DbClient,
+  ) -> Result<(), lapin::Error> {
     let max_delivery = 3;
     let reject = BasicRejectOptions { requeue: false };
-    let requeue = BasicNackOptions {
-      multiple: false,
-      requeue: true,
-    };
 
     let delivery_count = delivery
       .properties
@@ -74,20 +76,22 @@ impl EventConsumer {
       .and_then(|h| h.inner().get("x-delivery-count")?.as_short_uint())
       .unwrap_or(0);
 
-    if delivery_count > max_delivery {
-      delivery.reject(reject).await?
-    }
-
     let event = serde_json::from_slice::<Event>(&delivery.data).context("should deserialize evt");
+
+    if delivery_count > max_delivery {
+      log::error!("failed event dropped {:?}", event);
+      return delivery.reject(reject).await;
+    }
 
     if let Ok(ref e) = event {
       if EventConsumer::process_event(e, db).await.is_ok() {
-        delivery.ack(BasicAckOptions::default()).await?
+        return delivery.ack(BasicAckOptions::default()).await;
       };
     };
 
-    log::error!("failed event requeued {:?}", event);
-    delivery.nack(requeue).await
+    log::warn!("failed event requeued {:?}", event);
+    republish_to_queue(channel, &delivery, &delivery_count).await?;
+    delivery.reject(reject).await
   }
 
   async fn process_event(event: &Event, db: &DbClient) -> Result<(), sqlx::Error> {

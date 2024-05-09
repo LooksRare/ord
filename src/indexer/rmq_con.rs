@@ -1,9 +1,12 @@
 use anyhow::{Context, Error};
 use chrono::Utc;
-use lapin::options::ConfirmSelectOptions;
+use lapin::message::Delivery;
+use lapin::options::{BasicPublishOptions, ConfirmSelectOptions};
+use lapin::publisher_confirm::Confirmation;
 use lapin::tcp::{AMQPUriTcpExt, NativeTlsConnector};
+use lapin::types::{FieldTable, ShortUInt};
 use lapin::uri::AMQPUri;
-use lapin::{Connection, ConnectionProperties};
+use lapin::{BasicProperties, Channel, Connection, ConnectionProperties};
 use rand::distributions::{Alphanumeric, DistString};
 
 pub async fn setup_rabbitmq_connection(addr: &str) -> Result<lapin::Channel, anyhow::Error> {
@@ -57,4 +60,32 @@ pub fn generate_consumer_tag(prefix: &str) -> String {
     timestamp,
     Alphanumeric.sample_string(&mut rand::thread_rng(), 16)
   )
+}
+
+pub async fn republish_to_queue(
+  channel: &Channel,
+  delivery: &Delivery,
+  delivery_count: &ShortUInt,
+) -> lapin::Result<Confirmation> {
+  let mut new_headers = delivery
+    .properties
+    .headers()
+    .as_ref()
+    .cloned()
+    .unwrap_or_else(FieldTable::default);
+  new_headers.insert(
+    "x-delivery-count".into(),
+    ShortUInt::from(delivery_count + 1).into(),
+  );
+
+  channel
+    .basic_publish(
+      "",
+      delivery.routing_key.as_str(),
+      BasicPublishOptions::default(),
+      &delivery.data,
+      BasicProperties::default().with_headers(new_headers),
+    )
+    .await?
+    .await
 }
