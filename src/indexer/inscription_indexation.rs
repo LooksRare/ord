@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use ciborium::from_reader;
 use ordinals::SatPoint;
 use serde_json::Value;
@@ -24,8 +25,6 @@ impl InscriptionIndexation {
   }
 
   pub async fn sync_blocks(&self, block_height: &u32) -> Result<(), anyhow::Error> {
-    log::info!("Blocks committed event for={block_height}");
-
     let events = self.db.fetch_events_by_block_height(block_height).await?;
     let block_info = self.api.fetch_block_info(block_height).await?;
 
@@ -40,8 +39,10 @@ impl InscriptionIndexation {
           .process_inscription_transferred(&event, &block_info)
           .await
           .inspect_err(|e| log::error!("error with inscription_transferred {:?}: {e}", event)),
-      };
+      }?;
     }
+
+    log::info!("Blocks committed event for={block_height}");
 
     Ok(())
   }
@@ -53,15 +54,14 @@ impl InscriptionIndexation {
   ) -> Result<(), anyhow::Error> {
     let inscription_id = event.inscription_id.clone();
     let inscription = self.api.fetch_inscription_details(inscription_id).await?;
-
     let metadata = self.try_and_extract_metadata(&inscription.metadata);
+    let location = event.location.as_ref();
+    let to_location = match location {
+      Some(loc) => Some(self.process_location(loc).await?),
+      None => None,
+    };
+
     let id = self.db.save_inscription(&inscription, metadata).await?;
-
-    let mut to_location_details: Option<(String, u64)> = None;
-
-    if let Some(location) = &event.location {
-      to_location_details = self.process_location(location).await?;
-    }
 
     self
       .db
@@ -69,20 +69,17 @@ impl InscriptionIndexation {
         id,
         event.block_height,
         block_info.timestamp,
-        event.location.as_ref().map(|loc| loc.outpoint.txid),
-        to_location_details
-          .as_ref()
-          .map(|details| details.0.clone()),
-        event.location.as_ref().map(|loc| loc.outpoint),
-        event.location.as_ref().map(|loc| loc.offset),
+        location.map(|loc| loc.outpoint.txid),
+        to_location.as_ref().map(|d| d.0.clone()),
+        location.map(|loc| loc.outpoint),
+        location.map(|loc| loc.offset),
         None,
         None,
         None,
-        to_location_details.as_ref().map(|details| details.1),
+        to_location.as_ref().map(|d| d.1),
       )
-      .await?;
-
-    Ok(())
+      .await
+      .map_err(|err| anyhow!("error saving inscription_created location: {err}"))
   }
 
   fn try_and_extract_metadata(&self, metadata: &Option<Vec<u8>>) -> Option<String> {
@@ -107,24 +104,21 @@ impl InscriptionIndexation {
   ) -> Result<(), anyhow::Error> {
     let inscription_id = self
       .db
-      .fetch_inscription_id_by_genesis_id(event.inscription_id.clone())
+      .fetch_inscription_id_by_genesis_id(&event.inscription_id)
       .await?
-      .ok_or_else(|| {
-        anyhow::anyhow!(
-          "No inscription found for genesis_id: {}",
-          event.inscription_id
-        )
-      })?;
+      .ok_or_else(|| anyhow!("No inscription for genesis_id: {}", event.inscription_id))?;
 
-    let mut to_location_details: Option<(String, u64)> = None;
-    if let Some(location) = &event.location {
-      to_location_details = self.process_location(location).await?;
-    }
+    let location = event.location.as_ref();
+    let old_location = event.location.as_ref();
 
-    let mut from_location_details: Option<(String, u64)> = None;
-    if let Some(location) = &event.old_location {
-      from_location_details = self.process_location(location).await?;
-    }
+    let to_location = match &event.location {
+      Some(location) => Some(self.process_location(location).await?),
+      None => None,
+    };
+    let from_location = match &event.old_location {
+      Some(location) => Some(self.process_location(location).await?),
+      None => None,
+    };
 
     self
       .db
@@ -132,50 +126,35 @@ impl InscriptionIndexation {
         inscription_id,
         event.block_height,
         block_info.timestamp,
-        event.location.as_ref().map(|loc| loc.outpoint.txid),
-        to_location_details
-          .as_ref()
-          .map(|details| details.0.clone()),
-        event.location.as_ref().map(|loc| loc.outpoint),
-        event.location.as_ref().map(|loc| loc.offset),
-        from_location_details
-          .as_ref()
-          .map(|details| details.0.clone()),
-        event.old_location.as_ref().map(|loc| loc.outpoint),
-        event.old_location.as_ref().map(|loc| loc.offset),
-        to_location_details.as_ref().map(|details| details.1),
+        location.map(|loc| loc.outpoint.txid),
+        to_location.as_ref().map(|d| d.0.clone()),
+        location.map(|loc| loc.outpoint),
+        location.map(|loc| loc.offset),
+        from_location.as_ref().map(|d| d.0.clone()),
+        old_location.map(|loc| loc.outpoint),
+        old_location.map(|loc| loc.offset),
+        to_location.as_ref().map(|d| d.1),
       )
-      .await?;
-
-    Ok(())
+      .await
+      .map_err(|err| anyhow!("error saving inscription_transferred location: {err}"))
   }
 
-  async fn process_location(
-    &self,
-    location: &SatPoint,
-  ) -> Result<Option<(String, u64)>, anyhow::Error> {
+  async fn process_location(&self, location: &SatPoint) -> Result<(String, u64), anyhow::Error> {
     let tx_details = self.api.fetch_tx(location.outpoint.txid).await?;
 
     let output = tx_details
       .transaction
       .output
       .into_iter()
-      .nth(location.outpoint.vout.try_into().unwrap());
+      .nth(location.outpoint.vout.try_into()?)
+      .ok_or_else(|| anyhow!("output not found in tx: {}", location.outpoint.txid))?;
 
-    let address = output
-      .as_ref()
-      .and_then(|o| {
-        self
-          .settings
-          .chain()
-          .address_from_script(&o.script_pubkey)
-          .ok()
-      })
-      .map(|address| address.to_string());
+    let address = self
+      .settings
+      .chain()
+      .address_from_script(&output.script_pubkey)?
+      .to_string();
 
-    match address {
-      Some(addr) => Ok(Some((addr, output.unwrap().value))),
-      None => Ok(None),
-    }
+    Ok((address, output.value))
   }
 }

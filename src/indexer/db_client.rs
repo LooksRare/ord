@@ -130,7 +130,7 @@ impl DbClient {
 
   pub async fn fetch_inscription_id_by_genesis_id(
     &self,
-    genesis_id: String,
+    genesis_id: &String,
   ) -> Result<Option<i32>, sqlx::Error> {
     sqlx::query!(
       r#"SELECT id FROM inscription WHERE genesis_id = $1"#,
