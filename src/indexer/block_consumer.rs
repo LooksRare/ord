@@ -62,7 +62,7 @@ impl BlockConsumer {
     })
   }
 
-  /// Handle the persistence of incoming queue "event" messages.
+  /// Handle the persistence of incoming queue "block" messages.
   ///
   /// Re-enqueues the message up to `max_delivery` times for processing failures.
   /// Bubbles up the `lapin::Error` only if the ack/nack/reject itself fails.

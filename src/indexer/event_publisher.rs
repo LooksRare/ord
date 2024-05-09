@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use lapin::{options::BasicPublishOptions, BasicProperties, Channel};
 use std::time::Duration;
 use tokio::runtime::Runtime;
@@ -15,7 +15,7 @@ pub struct EventPublisher {
 }
 
 impl EventPublisher {
-  pub fn run(settings: &Settings) -> Result<Self, anyhow::Error> {
+  pub fn run(settings: &Settings) -> Result<Self> {
     let addr = settings
       .rabbitmq_addr()
       .context("rabbitmq amqp credentials and url must be defined")?
@@ -43,6 +43,11 @@ impl EventPublisher {
     Ok(EventPublisher { sender: tx })
   }
 
+  /// Publishes an event to the message exchange.
+  /// On failures it will retry up to `n` times with exponential backoff.
+  /// After `n` attempts, the retry loop will break and the main loop continues.
+  ///
+  /// TODO: Consider how to handle failure without skipping.
   async fn consume_channel(
     addr: String,
     exchange: String,
@@ -54,34 +59,39 @@ impl EventPublisher {
       let message = serde_json::to_vec(&event)?;
       let routing_key = EventPublisher::type_name(&event);
 
-      let mut attempts = 10;
       let mut backoff_delay = Duration::from_secs(1);
-      while attempts > 0 {
-        let result =
-          EventPublisher::publish_message(&channel, &exchange, routing_key, &message).await;
-        if let Err(e) = result {
-          attempts -= 1;
-          log::error!("Error publishing message: {}. Attempting to recreate the RMQ channel. Retries left: {}. Retrying in {} seconds.", e, attempts, backoff_delay.as_secs());
-          sleep(backoff_delay).await;
-          backoff_delay *= 2;
-          channel = setup_rabbitmq_connection(&addr)
-            .await
-            .unwrap_or_else(|conn_err| {
-              log::error!("Failed to recreate RabbitMQ channel: {}", conn_err);
-              channel
-            });
-        } else {
-          break;
-        }
-      }
+      let mut max_attempts = 8;
 
-      if attempts == 0 {
-        return Err(anyhow::Error::new(std::io::Error::new(
-          std::io::ErrorKind::Other,
-          "Failed to publish message after retries",
-        )));
-      }
+      let publish_retried = loop {
+        match EventPublisher::publish_message(&channel, &exchange, routing_key, &message).await {
+          Ok(value) => break Ok(value),
+          Err(e) => {
+            if max_attempts == 0 {
+              break Err(e);
+            }
+
+            max_attempts -= 1;
+
+            log::error!(
+              "Error: {e}. Retries left: {max_attempts}. Retrying in {}s.",
+              backoff_delay.as_secs()
+            );
+
+            sleep(backoff_delay).await;
+
+            channel = setup_rabbitmq_connection(&addr)
+              .await
+              .inspect_err(|e| log::error!("error reconnecting rmq: {e}"))
+              .unwrap_or_else(|_| channel);
+
+            backoff_delay *= 2;
+          }
+        }
+      };
+
+      publish_retried?
     }
+
     Ok(())
   }
 
@@ -103,10 +113,7 @@ impl EventPublisher {
       .await?;
 
     if !publish.is_ack() {
-      return Err(anyhow::Error::new(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        "Message was not acknowledged",
-      )));
+      return Err(anyhow!("message was not acknowledged"));
     }
 
     Ok(())
