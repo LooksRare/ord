@@ -91,7 +91,7 @@ impl BlockConsumer {
     let event = serde_json::from_slice::<Event>(&delivery.data).context("should deserialize evt");
 
     if let Ok(ref e) = event {
-      if let Ok(_) = BlockConsumer::process_event(e, indexer).await {
+      if BlockConsumer::process_event(e, indexer).await.is_ok() {
         delivery.ack(BasicAckOptions::default()).await?
       };
     };

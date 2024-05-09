@@ -77,7 +77,7 @@ impl EventConsumer {
     let event = serde_json::from_slice::<Event>(&delivery.data).context("should deserialize evt");
 
     if let Ok(ref e) = event {
-      if let Ok(_) = EventConsumer::process_event(e, db).await {
+      if EventConsumer::process_event(e, db).await.is_ok() {
         delivery.ack(BasicAckOptions::default()).await?
       };
     };

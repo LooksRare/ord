@@ -82,7 +82,7 @@ impl EventPublisher {
             channel = setup_rabbitmq_connection(&addr)
               .await
               .inspect_err(|e| log::error!("error reconnecting rmq: {e}"))
-              .unwrap_or_else(|_| channel);
+              .unwrap_or(channel);
 
             backoff_delay *= 2;
           }
