@@ -26,20 +26,23 @@ impl InscriptionIndexation {
 
   pub async fn sync_blocks(&self, block_height: &u32) -> Result<(), anyhow::Error> {
     let events = self.db.fetch_events_by_block_height(block_height).await?;
-    let block_info = self.api.fetch_block_info(block_height).await?;
 
-    for event in events {
-      match event.get_type() {
-        EventType::InscriptionCreated => self
-          .process_inscription_created(&event, &block_info)
-          .await
-          .inspect_err(|e| log::error!("error with inscription_created {:?}: {e}", event)),
+    if !events.is_empty() {
+      let block_info = self.api.fetch_block_info(block_height).await?;
 
-        EventType::InscriptionTransferred => self
-          .process_inscription_transferred(&event, &block_info)
-          .await
-          .inspect_err(|e| log::error!("error with inscription_transferred {:?}: {e}", event)),
-      }?;
+      for event in events {
+        match event.get_type() {
+          EventType::InscriptionCreated => self
+            .process_inscription_created(&event, &block_info)
+            .await
+            .inspect_err(|e| log::error!("error with inscription_created {:?}: {e}", event)),
+
+          EventType::InscriptionTransferred => self
+            .process_inscription_transferred(&event, &block_info)
+            .await
+            .inspect_err(|e| log::error!("error with inscription_transferred {:?}: {e}", event)),
+        }?;
+      }
     }
 
     log::info!("Blocks committed event for={block_height}");
