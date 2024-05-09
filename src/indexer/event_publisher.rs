@@ -1,12 +1,9 @@
-<<<<<<< HEAD
 use anyhow::{anyhow, Context, Result};
-use lapin::{options::BasicPublishOptions, BasicProperties, Channel};
+use lapin::{
+  options::{BasicPublishOptions, BasicQosOptions},
+  BasicProperties, Channel,
+};
 use std::time::Duration;
-=======
-use anyhow::{Context, Result};
-use lapin::options::BasicQosOptions;
-use lapin::{options::BasicPublishOptions, BasicProperties};
->>>>>>> ff2661c2d45defd1d3ce9df0400ebc2a266ff010
 use tokio::runtime::Runtime;
 use tokio::sync::mpsc;
 use tokio::time::sleep;
@@ -15,6 +12,15 @@ use crate::index::event::Event;
 use crate::indexer::rmq_con::setup_rabbitmq_connection;
 use crate::settings::Settings;
 use crate::shutdown_process;
+
+async fn rabbit_qos_setup(channel: Channel) -> Result<Channel, anyhow::Error> {
+  channel
+    .basic_qos(2, BasicQosOptions::default())
+    .await
+    .context("failed to set basic qos")?;
+
+  Ok(channel)
+}
 
 pub struct EventPublisher {
   pub(crate) sender: mpsc::Sender<Event>,
@@ -60,11 +66,7 @@ impl EventPublisher {
     mut rx: mpsc::Receiver<Event>,
   ) -> Result<()> {
     let channel = setup_rabbitmq_connection(&addr).await?;
-    
-    channel
-      .basic_qos(2, BasicQosOptions::default())
-      .await
-      .context("failed to set basic qos")?;
+    let mut channel = rabbit_qos_setup(channel).await?;
 
     while let Some(event) = rx.recv().await {
       let message = serde_json::to_vec(&event)?;
@@ -90,7 +92,7 @@ impl EventPublisher {
 
             sleep(backoff_delay).await;
 
-            channel = setup_rabbitmq_connection(&addr)
+            channel = rabbit_qos_setup(setup_rabbitmq_connection(&addr).await?)
               .await
               .inspect_err(|e| log::error!("error reconnecting rmq: {e}"))
               .unwrap_or(channel);
