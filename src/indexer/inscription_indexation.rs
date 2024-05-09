@@ -45,7 +45,7 @@ impl InscriptionIndexation {
       }
     }
 
-    log::info!("Block {block_height} consumed");
+    // log::info!("Block {block_height} consumed");
 
     Ok(())
   }
