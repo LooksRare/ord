@@ -101,7 +101,7 @@ impl<'index> Updater<'index> {
       uncommitted += 1;
 
       if uncommitted == self.index.settings.commit_interval() {
-        self.commit(wtx, value_cache)?;
+        self.commit(wtx, value_cache, uncommitted)?;
         value_cache = HashMap::new();
         uncommitted = 0;
         wtx = self.index.begin_write()?;
@@ -140,7 +140,7 @@ impl<'index> Updater<'index> {
     }
 
     if uncommitted > 0 {
-      self.commit(wtx, value_cache)?;
+      self.commit(wtx, value_cache, uncommitted)?;
     }
 
     if let Some(progress_bar) = &mut progress_bar {
@@ -696,7 +696,12 @@ impl<'index> Updater<'index> {
     Ok(())
   }
 
-  fn commit(&mut self, wtx: WriteTransaction, value_cache: HashMap<OutPoint, u64>) -> Result {
+  fn commit(
+    &mut self,
+    wtx: WriteTransaction,
+    value_cache: HashMap<OutPoint, u64>,
+    uncommitted: usize,
+  ) -> Result {
     log::info!(
       "Committing at block height {}, {} outputs traversed, {} in map, {} cached",
       self.height,
@@ -738,6 +743,24 @@ impl<'index> Updater<'index> {
     wtx.commit()?;
 
     Reorg::update_savepoints(self.index, self.height)?;
+
+    if self.height >= self.index.first_inscription_height {
+      if let Some(sender) = self.index.event_sender.as_ref() {
+        if let Ok(uncommitted) = u32::try_from(uncommitted) {
+          for current_height in (self.height - uncommitted)..self.height {
+            sender.blocking_send(Event::BlockCommitted {
+              height: current_height,
+            })?;
+          }
+        } else {
+          log::error!(
+            "Failed to publish block range from_height: {}, uncommitted: {}",
+            self.height,
+            uncommitted
+          );
+        }
+      }
+    }
 
     Ok(())
   }

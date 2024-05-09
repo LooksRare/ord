@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Event {
   InscriptionCreated {
     block_height: u32,
@@ -40,5 +40,8 @@ pub enum Event {
     outpoint: OutPoint,
     rune_id: RuneId,
     txid: Txid,
+  },
+  BlockCommitted {
+    height: u32,
   },
 }

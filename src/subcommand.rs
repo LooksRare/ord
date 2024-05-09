@@ -1,4 +1,6 @@
 use super::*;
+use crate::indexer::event_publisher::EventPublisher;
+use crate::indexer::{block_consumer, event_consumer};
 
 pub mod balances;
 pub mod decode;
@@ -39,6 +41,12 @@ pub(crate) enum Subcommand {
   Runes,
   #[command(about = "Run the explorer server")]
   Server(server::Server),
+  #[command(about = "Run the explorer server in event emit mode")]
+  EventServer(server::Server),
+  #[command(about = "Run inscription event consumer")]
+  EventConsumer(event_consumer::EventConsumer),
+  #[command(about = "Run block event consumer")]
+  BlockConsumer(block_consumer::BlockConsumer),
   #[command(about = "Display settings")]
   Settings,
   #[command(about = "Display information about a block's subsidy")]
@@ -71,6 +79,19 @@ impl Subcommand {
         LISTENERS.lock().unwrap().push(handle.clone());
         server.run(settings, index, handle)
       }
+      Self::EventServer(server) => {
+        let publisher = EventPublisher::run(&settings)?;
+        let handle = axum_server::Handle::new();
+        let index = Arc::new(Index::open_with_event_sender(
+          &settings,
+          Some(publisher.sender.clone()),
+        )?);
+
+        LISTENERS.lock().unwrap().push(handle.clone());
+        server.run(settings, index, handle)
+      }
+      Self::EventConsumer(event_consumer) => event_consumer.run(&settings),
+      Self::BlockConsumer(block_consumer) => block_consumer.run(&settings),
       Self::Settings => settings::run(settings),
       Self::Subsidy(subsidy) => subsidy.run(),
       Self::Supply => supply::run(),

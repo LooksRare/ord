@@ -28,6 +28,8 @@ pub struct Settings {
   server_password: Option<String>,
   server_url: Option<String>,
   server_username: Option<String>,
+  rabbitmq_url: Option<String>,
+  rabbitmq_exchange: Option<String>,
 }
 
 impl Settings {
@@ -143,6 +145,8 @@ impl Settings {
       server_password: self.server_password.or(source.server_password),
       server_url: self.server_url.or(source.server_url),
       server_username: self.server_username.or(source.server_username),
+      rabbitmq_url: self.rabbitmq_url.or(source.rabbitmq_url),
+      rabbitmq_exchange: self.rabbitmq_exchange.or(source.rabbitmq_exchange),
     }
   }
 
@@ -178,6 +182,8 @@ impl Settings {
       server_password: options.server_password,
       server_url: None,
       server_username: options.server_username,
+      rabbitmq_url: options.rabbitmq_url,
+      rabbitmq_exchange: options.rabbitmq_exchange,
     }
   }
 
@@ -257,6 +263,8 @@ impl Settings {
       server_password: get_string("SERVER_PASSWORD"),
       server_url: get_string("SERVER_URL"),
       server_username: get_string("SERVER_USERNAME"),
+      rabbitmq_url: get_string("RMQ_URL"),
+      rabbitmq_exchange: get_string("RMQ_EXCHANGE"),
     })
   }
 
@@ -287,6 +295,8 @@ impl Settings {
       server_password: None,
       server_url: Some(server_url.into()),
       server_username: None,
+      rabbitmq_url: None,
+      rabbitmq_exchange: None,
     }
   }
 
@@ -367,6 +377,8 @@ impl Settings {
       server_password: self.server_password,
       server_url: self.server_url,
       server_username: self.server_username,
+      rabbitmq_url: self.rabbitmq_url,
+      rabbitmq_exchange: self.rabbitmq_exchange,
     })
   }
 
@@ -426,7 +438,7 @@ impl Settings {
             "regtest" => Chain::Regtest,
             "signet" => Chain::Signet,
             other => bail!("Bitcoin RPC server on unknown chain: {other}"),
-          }
+          };
         }
         Err(bitcoincore_rpc::Error::JsonRpc(bitcoincore_rpc::jsonrpc::Error::Rpc(err)))
           if err.code == -28 => {}
@@ -562,6 +574,14 @@ impl Settings {
 
   pub(crate) fn server_url(&self) -> Option<&str> {
     self.server_url.as_deref()
+  }
+
+  pub fn rabbitmq_exchange(&self) -> Option<&str> {
+    self.rabbitmq_exchange.as_deref()
+  }
+
+  pub fn rabbitmq_addr(&self) -> Option<&String> {
+    self.rabbitmq_url.as_ref()
   }
 }
 
@@ -1012,10 +1032,14 @@ mod tests {
       ("SERVER_PASSWORD", "server password"),
       ("SERVER_URL", "server url"),
       ("SERVER_USERNAME", "server username"),
+      ("RMQ_URL", "http://127.0.0.1"),
+      ("RMQ_USERNAME", "rmq username"),
+      ("RMQ_PASSWORD", "rmq password"),
+      ("RMQ_EXCHANGE", "rmq exchange"),
     ]
-    .into_iter()
-    .map(|(key, value)| (key.into(), value.into()))
-    .collect::<BTreeMap<String, String>>();
+      .into_iter()
+      .map(|(key, value)| (key.into(), value.into()))
+      .collect::<BTreeMap<String, String>>();
 
     pretty_assert_eq!(
       Settings::from_env(env).unwrap(),
@@ -1056,6 +1080,8 @@ mod tests {
         server_password: Some("server password".into()),
         server_url: Some("server url".into()),
         server_username: Some("server username".into()),
+        rabbitmq_url: Some("http://127.0.0.1".into()),
+        rabbitmq_exchange: Some("rmq exchange".into()),
       }
     );
   }
@@ -1089,6 +1115,8 @@ mod tests {
           "--no-index-inscriptions",
           "--server-password=server password",
           "--server-username=server username",
+          "--rabbitmq-url=http://127.0.0.1",
+          "--rabbitmq-exchange=rmq exchange",
         ])
         .unwrap()
       ),
@@ -1118,6 +1146,8 @@ mod tests {
         server_password: Some("server password".into()),
         server_url: None,
         server_username: Some("server username".into()),
+        rabbitmq_url: Some("http://127.0.0.1".into()),
+        rabbitmq_exchange: Some("rmq exchange".into()),
       }
     );
   }

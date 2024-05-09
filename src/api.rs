@@ -76,6 +76,33 @@ pub struct Children {
   pub page: usize,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct InscriptionDetails {
+  pub id: InscriptionId,
+  pub number: i32,
+  pub owner: Option<String>,
+  pub content_type: Option<String>,
+  pub content_length: Option<usize>,
+  pub metadata: Option<Vec<u8>>,
+
+  pub genesis_block_height: u32,
+  pub genesis_block_time: i64,
+
+  pub sat_number: Option<u64>,
+  pub sat_name: Option<String>,
+  pub sat_rarity: Option<Rarity>,
+  pub sat_block_height: Option<u32>,
+  pub sat_block_time: Option<i64>,
+
+  pub satpoint: SatPoint,
+  pub value: Option<u64>,
+  pub fee: u64,
+  pub charms: u16,
+
+  pub children: Vec<InscriptionId>,
+  pub parents: Vec<InscriptionId>,
+}
+
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub struct Inscription {
   pub address: Option<String>,

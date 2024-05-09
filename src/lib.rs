@@ -2,10 +2,10 @@
   clippy::large_enum_variant,
   clippy::result_large_err,
   clippy::too_many_arguments,
+  clippy::cast_lossless,
   clippy::type_complexity
 )]
 #![deny(
-  clippy::cast_lossless,
   clippy::cast_possible_truncation,
   clippy::cast_possible_wrap,
   clippy::cast_sign_loss
@@ -120,6 +120,15 @@ pub mod subcommand;
 mod tally;
 pub mod templates;
 pub mod wallet;
+pub mod indexer {
+  pub mod api_client;
+  pub mod block_consumer;
+  pub mod db_client;
+  pub mod event_consumer;
+  pub mod event_publisher;
+  pub mod inscription_indexation;
+  pub mod rmq_con;
+}
 
 type Result<T = (), E = Error> = std::result::Result<T, E>;
 
@@ -231,24 +240,25 @@ fn gracefully_shutdown_indexer() {
   }
 }
 
+fn shutdown_process() {
+  if SHUTTING_DOWN.fetch_or(true, atomic::Ordering::Relaxed) {
+    process::exit(1);
+  }
+
+  eprintln!("Shutting down gracefully. Press <CTRL-C> again to shutdown immediately.");
+
+  LISTENERS
+    .lock()
+    .unwrap()
+    .iter()
+    .for_each(|handle| handle.graceful_shutdown(Some(Duration::from_millis(100))));
+
+  gracefully_shutdown_indexer();
+}
+
 pub fn main() {
   env_logger::init();
-  ctrlc::set_handler(move || {
-    if SHUTTING_DOWN.fetch_or(true, atomic::Ordering::Relaxed) {
-      process::exit(1);
-    }
-
-    eprintln!("Shutting down gracefully. Press <CTRL-C> again to shutdown immediately.");
-
-    LISTENERS
-      .lock()
-      .unwrap()
-      .iter()
-      .for_each(|handle| handle.graceful_shutdown(Some(Duration::from_millis(100))));
-
-    gracefully_shutdown_indexer();
-  })
-  .expect("Error setting <CTRL-C> handler");
+  ctrlc::set_handler(shutdown_process).expect("Error setting <CTRL-C> handler");
 
   let args = Arguments::parse();
 
