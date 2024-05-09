@@ -87,7 +87,7 @@ impl ApiClient {
 
   pub async fn fetch_inscription_details(
     &self,
-    inscription_id: String,
+    inscription_id: &String,
   ) -> Result<InscriptionDetails, anyhow::Error> {
     let request_builder = self
       .client
