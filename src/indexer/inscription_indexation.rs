@@ -55,8 +55,10 @@ impl InscriptionIndexation {
     event: &Event,
     block_info: &BlockInfo,
   ) -> anyhow::Result<()> {
-    let inscription_id = event.inscription_id.clone();
-    let inscription = self.api.fetch_inscription_details(inscription_id).await?;
+    let inscription = self
+      .api
+      .fetch_inscription_details(&event.inscription_id)
+      .await?;
     let metadata = self.try_and_extract_metadata(&inscription.metadata);
     let location = event.location.as_ref();
     let to_location = match location {
@@ -104,12 +106,22 @@ impl InscriptionIndexation {
     &self,
     event: &Event,
     block_info: &BlockInfo,
-  ) -> anyhow::Result<()> {
-    let inscription_id = self
+  ) -> Result<(), anyhow::Error> {
+    let inscription_id = match self
       .db
       .fetch_inscription_id_by_genesis_id(&event.inscription_id)
       .await?
-      .ok_or_else(|| anyhow!("No inscription for genesis_id: {}", event.inscription_id))?;
+    {
+      Some(id) => id,
+      None => {
+        let inscription = self
+          .api
+          .fetch_inscription_details(&event.inscription_id)
+          .await?;
+        let metadata = self.try_and_extract_metadata(&inscription.metadata);
+        self.db.save_inscription(&inscription, metadata).await?
+      }
+    };
 
     let location = event.location.as_ref();
     let old_location = event.location.as_ref();
