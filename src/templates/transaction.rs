@@ -9,6 +9,13 @@ pub struct TransactionHtml {
   pub txid: Txid,
 }
 
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct TransactionDetails {
+  pub chain: Chain,
+  pub transaction: Transaction,
+  pub tx_index: Option<usize>,
+}
+
 impl PageContent for TransactionHtml {
   fn title(&self) -> String {
     format!("Transaction {}", self.txid)

@@ -1,3 +1,4 @@
+use bitcoin::consensus::deserialize;
 use {
   self::{
     entry::{
@@ -1532,6 +1533,20 @@ impl Index {
     }
 
     self.client.get_raw_transaction(&txid, None).into_option()
+  }
+
+  pub(crate) fn get_transaction_details(
+    &self,
+    txid: Txid,
+  ) -> Result<Option<(Transaction, Option<usize>)>> {
+    let tx_info = self.client.get_raw_transaction_info(&txid, None)?;
+    let transaction: Transaction = deserialize(&tx_info.hex)?;
+    if let Some(block_hash) = tx_info.blockhash {
+      let block = self.client.get_block(&block_hash)?;
+      let tx_index = block.txdata.iter().position(|tx| tx.txid() == txid);
+      return Ok(Option::from((transaction, tx_index)));
+    }
+    Ok(None)
   }
 
   pub(crate) fn find(&self, sat: Sat) -> Result<Option<SatPoint>> {
