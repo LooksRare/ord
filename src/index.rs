@@ -1546,7 +1546,7 @@ impl Index {
       let tx_index = block.txdata.iter().position(|tx| tx.txid() == txid);
       return Ok(Option::from((transaction, tx_index)));
     }
-    Ok(Option::from((transaction, None)))
+    Ok(None)
   }
 
   pub(crate) fn find(&self, sat: Sat) -> Result<Option<SatPoint>> {
