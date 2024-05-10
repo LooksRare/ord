@@ -172,8 +172,9 @@ impl InscriptionIndexation {
     let address = self
       .settings
       .chain()
-      .address_from_script(&output.script_pubkey)?
-      .to_string();
+      .address_from_script(&output.script_pubkey)
+      .map(|addr| addr.to_string())
+      .unwrap_or_else(|_| "not_valid_address".to_string());
 
     Ok((address, output.value, tx_details.tx_index))
   }
